@@ -285,6 +285,9 @@
     <button class="tab-btn" data-tab="dashboard" onclick="switchTab('dashboard')">
       <span class="tab-icon">📊</span>Dashboard
     </button>
+    <button class="tab-btn" data-tab="recurring" onclick="switchTab('recurring')">
+      <span class="tab-icon">🔁</span>Recurring
+    </button>
     <button class="tab-btn" data-tab="cards" onclick="switchTab('cards')">
       <span class="tab-icon">💳</span>Cards
     </button>
@@ -751,9 +754,10 @@ function switchTab(tab) {
 }
 
 function renderTab() {
-  if (activeTab === 'log')       renderLog();
+  if (activeTab === 'log')            renderLog();
   else if (activeTab === 'dashboard') renderDashboard();
-  else                           renderCards();
+  else if (activeTab === 'recurring') renderRecurring();
+  else                                renderCards();
 }
 
 // ═══════════════════════════════════════════════
@@ -793,7 +797,7 @@ function renderLog() {
   const capText = b => b.cap ? ` (capped at $${b.cap}/mo)` : '';
 
   c.innerHTML = `
-    ${renderRecurringReminders()}
+    ${renderRecurringReminders('log')}
     ${best ? `
       <div class="suggest-box">
         <div class="suggest-label">Best card for ${CAT_ICON[logForm.category]} ${logForm.category}</div>
@@ -855,28 +859,70 @@ function renderLog() {
                 oninput="logForm.note=this.value">${logForm.note}</textarea>
     </div>
 
-    <button class="btn btn-primary" onclick="submitLog()">Log Expense</button>
+    <button class="btn btn-primary" onclick="submitLog()">Log Expense</button>`;
+}
 
-    <div style="height:24px"></div>
+function renderRecurring() {
+  const recList = recurring;
+  const fixedMonthly = recList
+    .filter(r => !r.variable && (r.type === 'recurring' || r.type === 'installment'))
+    .reduce((s, r) => s + (r.amount || 0), 0);
+  const varMonthly = recList
+    .filter(r => r.variable)
+    .reduce((s, r) => s + (r.amount || 0), 0);
+  const totalEst = fixedMonthly + varMonthly;
+  const installmentCount = recList.filter(r => r.type === 'installment').length;
+  const recurringCount   = recList.filter(r => r.type !== 'installment').length;
+
+  const summary = recList.length ? `
+    <div class="card" style="margin-bottom:16px">
+      <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px">Estimated monthly commitment</div>
+      <div style="font-size:30px;font-weight:800">$${fmt(totalEst)}</div>
+      <div style="font-size:12px;color:var(--muted);margin-top:6px">
+        ${recurringCount} recurring · ${installmentCount} instalment${installmentCount===1?'':'s'}
+        ${varMonthly ? ` · <span style="color:var(--accent)">~$${fmt(varMonthly)} variable</span>` : ''}
+      </div>
+    </div>` : '';
+
+  document.getElementById('content').innerHTML = `
+    ${renderRecurringReminders('rec')}
+    <div class="section-title">Recurring & Instalments</div>
+    ${summary}
     ${renderRecurringSection()}`;
 }
 
-function renderRecurringReminders() {
+function reminderDayFor(item) {
+  if (item.reminderDay) return item.reminderDay;
+  if (item.billDay)     return Math.min(31, item.billDay + 1);
+  return null;
+}
+
+function renderRecurringReminders(prefix) {
   const mo  = currentMonth();
   const day = new Date().getDate();
-  const due = recurring.filter(r => r.variable && r.billDay && day >= r.billDay && r.lastLoggedMonth !== mo);
+  const due = recurring.filter(r => {
+    if (!r.variable) return false;
+    const rd = reminderDayFor(r);
+    return rd && day >= rd && r.lastLoggedMonth !== mo;
+  });
   if (!due.length) return '';
-  return due.map((item, i) => {
+  return due.map(item => {
     const realIdx = recurring.indexOf(item);
+    const inputId = `reminder-amt-${prefix||'log'}-${realIdx}`;
+    const sub = [
+      item.billDay   ? `bill ${item.billDay}` : null,
+      item.chargeDay ? `charge ${item.chargeDay}` : null,
+      `remind ${reminderDayFor(item)}`,
+    ].filter(Boolean).join(' · ');
     return `
       <div style="background:linear-gradient(135deg,#fef3c7,#fde68a);border:1px solid #f59e0b;border-radius:12px;padding:14px;margin-bottom:12px">
         <div style="font-size:13px;font-weight:700;color:#92400e;margin-bottom:4px">⚠️ ${item.name} bill is in</div>
-        <div style="font-size:12px;color:#78350f;margin-bottom:10px">Bill day ${item.billDay}${item.chargeDay ? ` · card charges on day ${item.chargeDay}` : ''} · enter this month's amount</div>
+        <div style="font-size:12px;color:#78350f;margin-bottom:10px">${sub} · enter this month's amount</div>
         <div style="display:flex;gap:8px;align-items:center">
           <span style="color:#92400e;font-weight:700">$</span>
-          <input id="reminder-amt-${realIdx}" type="number" inputmode="decimal" step="0.01" placeholder="Amount"
+          <input id="${inputId}" type="number" inputmode="decimal" step="0.01" placeholder="Amount"
                  style="flex:1;padding:8px 10px;border:1px solid #f59e0b;border-radius:8px;font-size:14px;background:#fff" />
-          <button onclick="logVariable(${realIdx})"
+          <button onclick="logVariable(${realIdx}, '${inputId}')"
                   style="background:#f59e0b;color:#fff;border:none;padding:8px 14px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer">Log</button>
         </div>
       </div>`;
@@ -887,14 +933,15 @@ function renderRecurringSection() {
   if (recurringView) {
     const catOpts = CATEGORIES.map(c => `<option value="${c}">${c}</option>`).join('');
     const cardOpts = cardsConfig.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+    const editing = editingRecurringIdx !== null && editingRecurringIdx >= 0;
     return `
-      <div class="section-title">Add Recurring / Instalment</div>
+      <div class="section-title">${editing ? 'Edit' : 'Add'} Recurring / Instalment</div>
       <div class="card">
         <div class="form-group">
           <label class="label">Type</label>
           <div class="chip-grid">
-            <div class="chip active" id="rtype-recurring" onclick="setRType('recurring')">🔁 Recurring</div>
-            <div class="chip" id="rtype-installment" onclick="setRType('installment')">📦 Instalment</div>
+            <div class="chip ${recurringType==='recurring'?'active':''}" id="rtype-recurring" onclick="setRType('recurring')">🔁 Recurring</div>
+            <div class="chip ${recurringType==='installment'?'active':''}" id="rtype-installment" onclick="setRType('installment')">📦 Instalment</div>
           </div>
         </div>
         <div class="form-group">
@@ -913,9 +960,14 @@ function renderRecurringSection() {
           </label>
         </div>
         <div class="form-group" id="r-billday-wrap" style="display:none">
-          <label class="label">Bill shown on day of month</label>
+          <label class="label">Bill arrives on day of month</label>
           <input type="number" inputmode="numeric" id="r-billday" placeholder="e.g. 12" min="1" max="31" />
-          <div style="font-size:11px;color:var(--muted);margin-top:4px">Reminder appears on this day so you can enter the bill amount.</div>
+          <div style="font-size:11px;color:var(--muted);margin-top:4px">The day the biller sends you the bill (e.g. SP Group emails on the 12th).</div>
+        </div>
+        <div class="form-group" id="r-reminderday-wrap" style="display:none">
+          <label class="label">Show reminder on day of month</label>
+          <input type="number" inputmode="numeric" id="r-reminderday" placeholder="defaults to bill day + 1" min="1" max="31" />
+          <div style="font-size:11px;color:var(--muted);margin-top:4px">Banner appears on Log + Dashboard from this day onwards until you log the amount. Leave blank to default to bill day + 1.</div>
         </div>
         <div class="form-group" id="r-chargeday-wrap" style="display:none">
           <label class="label">Card charges on day of month</label>
@@ -936,13 +988,13 @@ function renderRecurringSection() {
         </div>
         <button class="btn btn-primary" onclick="saveRecurringItem()">Save</button>
         <div style="height:8px"></div>
-        <button class="btn btn-surface" onclick="recurringView=false;renderLog()">Cancel</button>
+        <button class="btn btn-surface" onclick="cancelRecurringEdit()">Cancel</button>
       </div>`;
   }
 
   if (!recurring.length) return `
     <div class="section-title">Recurring & Instalments</div>
-    <button class="btn btn-surface" onclick="recurringView=true;renderLog()">+ Add Recurring / Instalment</button>`;
+    <button class="btn btn-surface" onclick="editingRecurringIdx=null;recurringView=true;recurringType='recurring';renderTab()">+ Add Recurring / Instalment</button>`;
 
   const rows = recurring.map((item, i) => {
     const remaining = item.type === 'installment' ? ` · ${item.monthsLeft} left` : '';
@@ -950,7 +1002,7 @@ function renderRecurringSection() {
     const dot  = card ? `<span class="dot" style="background:${card.color}"></span>` : '';
     const icon = item.type === 'installment' ? '📦' : (item.variable ? '📝' : '🔁');
     const varTag = item.variable
-      ? ` · variable (bill ${item.billDay||'?'}${item.chargeDay ? `, charge ${item.chargeDay}` : ''})`
+      ? ` · variable (bill ${item.billDay||'?'}, remind ${reminderDayFor(item)||'?'}${item.chargeDay ? `, charge ${item.chargeDay}` : ''})`
       : '';
     const amtLabel = item.variable ? `~$${fmt(item.amount)}/mo` : `$${fmt(item.amount)}/mo`;
     return `
@@ -960,7 +1012,8 @@ function renderRecurringSection() {
           <div style="font-size:11px;color:var(--muted)">${CAT_ICON[item.category]||''} ${item.category} · ${dot}${cardName(item.card)} · ${amtLabel}${remaining}${varTag}</div>
         </div>
         <button style="background:var(--accent);color:#fff;border:none;padding:7px 12px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;flex-shrink:0" onclick="quickLog(${i})">Log</button>
-        <button style="background:none;color:var(--muted);border:none;font-size:20px;cursor:pointer;padding:4px;flex-shrink:0;line-height:1" onclick="deleteRecurringItem(${i})">×</button>
+        <button title="Edit" style="background:none;color:var(--muted);border:none;font-size:16px;cursor:pointer;padding:4px;flex-shrink:0;line-height:1" onclick="editRecurringItem(${i})">✏️</button>
+        <button title="Delete" style="background:none;color:var(--muted);border:none;font-size:20px;cursor:pointer;padding:4px;flex-shrink:0;line-height:1" onclick="deleteRecurringItem(${i})">×</button>
       </div>`;
   }).join('');
 
@@ -968,15 +1021,15 @@ function renderRecurringSection() {
     <div class="section-title">Recurring & Instalments</div>
     <div class="card" style="padding:0 16px">${rows}</div>
     <div style="height:8px"></div>
-    <button class="btn btn-surface" onclick="recurringView=true;renderLog()">+ Add Another</button>`;
+    <button class="btn btn-surface" onclick="editingRecurringIdx=null;recurringView=true;recurringType='recurring';renderTab()">+ Add Another</button>`;
 }
 
 function toggleVariable() {
   const checked = document.getElementById('r-variable')?.checked;
-  const bw = document.getElementById('r-billday-wrap');
-  const cw = document.getElementById('r-chargeday-wrap');
-  if (bw) bw.style.display = checked ? 'block' : 'none';
-  if (cw) cw.style.display = checked ? 'block' : 'none';
+  const show = checked ? 'block' : 'none';
+  ['r-billday-wrap','r-reminderday-wrap','r-chargeday-wrap'].forEach(id => {
+    const el = document.getElementById(id); if (el) el.style.display = show;
+  });
 }
 
 function chargeDateFor(billDay, chargeDay) {
@@ -989,6 +1042,13 @@ function chargeDateFor(billDay, chargeDay) {
   const dim = new Date(y, m + 1, 0).getDate();
   const d = Math.min(chargeDay, dim);
   return `${y}-${String(m+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+}
+
+function cancelRecurringEdit() {
+  recurringView = false;
+  recurringType = 'recurring';
+  editingRecurringIdx = null;
+  renderTab();
 }
 
 let recurringType = 'recurring';
@@ -1006,31 +1066,80 @@ async function saveRecurringItem() {
   const cat    = document.getElementById('r-cat')?.value;
   const card   = document.getElementById('r-card')?.value;
   const months = recurringType === 'installment' ? parseInt(document.getElementById('r-months')?.value) : null;
-  const isVar    = recurringType === 'recurring' && !!document.getElementById('r-variable')?.checked;
-  const billDay  = isVar ? parseInt(document.getElementById('r-billday')?.value)   : null;
-  const chargeDay= isVar ? parseInt(document.getElementById('r-chargeday')?.value) : null;
+  const isVar      = recurringType === 'recurring' && !!document.getElementById('r-variable')?.checked;
+  const billDay    = isVar ? parseInt(document.getElementById('r-billday')?.value)     : null;
+  const chargeDay  = isVar ? parseInt(document.getElementById('r-chargeday')?.value)   : null;
+  const remVal     = document.getElementById('r-reminderday')?.value;
+  const reminderDay= isVar && remVal ? parseInt(remVal) : null;
   if (!name)                          { toast('Enter a name', 'err'); return; }
   if (!amount || amount <= 0)         { toast('Enter a valid amount', 'err'); return; }
   if (!cat)                           { toast('Select a category', 'err'); return; }
   if (!card)                          { toast('Select a card', 'err'); return; }
   if (recurringType === 'installment' && (!months || months < 1)) { toast('Enter number of instalments', 'err'); return; }
-  if (isVar && (!billDay   || billDay   < 1 || billDay   > 31)) { toast('Enter bill day (1–31)', 'err'); return; }
-  if (isVar && (!chargeDay || chargeDay < 1 || chargeDay > 31)) { toast('Enter charge day (1–31)', 'err'); return; }
-  const item = { id: uid(), type: recurringType, name, amount, category: cat, card, note: '' };
+  if (isVar && (!billDay     || billDay     < 1 || billDay     > 31)) { toast('Enter bill day (1–31)', 'err'); return; }
+  if (isVar && (!chargeDay   || chargeDay   < 1 || chargeDay   > 31)) { toast('Enter charge day (1–31)', 'err'); return; }
+  if (isVar && reminderDay !== null && (reminderDay < 1 || reminderDay > 31)) { toast('Reminder day must be 1–31', 'err'); return; }
+
+  const editing = editingRecurringIdx !== null && editingRecurringIdx >= 0;
+  const existing = editing ? recurring[editingRecurringIdx] : null;
+
+  const item = editing
+    ? { ...existing, type: recurringType, name, amount, category: cat, card }
+    : { id: uid(), type: recurringType, name, amount, category: cat, card, note: '' };
+
   if (recurringType === 'installment') item.monthsLeft = months;
-  if (isVar) { item.variable = true; item.billDay = billDay; item.chargeDay = chargeDay; }
+  else delete item.monthsLeft;
+
+  if (isVar) {
+    item.variable = true;
+    item.billDay = billDay;
+    item.chargeDay = chargeDay;
+    if (reminderDay) item.reminderDay = reminderDay; else delete item.reminderDay;
+  } else {
+    delete item.variable; delete item.billDay; delete item.chargeDay; delete item.reminderDay;
+  }
+
   loader(true, 'Saving…');
+  const snapshot = editing ? { ...existing } : null;
   try {
-    recurring.push(item);
+    if (editing) recurring[editingRecurringIdx] = item;
+    else         recurring.push(item);
     await saveRecurring();
     recurringView = false;
     recurringType = 'recurring';
-    toast('Added!', 'ok');
-    renderLog();
+    editingRecurringIdx = null;
+    toast(editing ? 'Updated!' : 'Added!', 'ok');
+    renderTab();
   } catch(e) {
-    recurring.pop();
+    if (editing) recurring[editingRecurringIdx] = snapshot;
+    else         recurring.pop();
     toast('Save failed: ' + e.message, 'err');
   } finally { loader(false); }
+}
+
+let editingRecurringIdx = null;
+function editRecurringItem(idx) {
+  const item = recurring[idx];
+  if (!item) return;
+  editingRecurringIdx = idx;
+  recurringView = true;
+  recurringType = item.type || 'recurring';
+  renderTab();
+  setTimeout(() => {
+    setRType(recurringType);
+    document.getElementById('r-name').value     = item.name     || '';
+    document.getElementById('r-amount').value   = item.amount   || '';
+    document.getElementById('r-cat').value      = item.category || '';
+    document.getElementById('r-card').value     = item.card     || '';
+    if (item.type === 'installment') document.getElementById('r-months').value = item.monthsLeft || '';
+    if (item.variable) {
+      const cb = document.getElementById('r-variable');
+      if (cb) { cb.checked = true; toggleVariable(); }
+      document.getElementById('r-billday').value     = item.billDay     || '';
+      document.getElementById('r-chargeday').value   = item.chargeDay   || '';
+      document.getElementById('r-reminderday').value = item.reminderDay || '';
+    }
+  }, 0);
 }
 
 async function quickLog(idx) {
@@ -1066,8 +1175,7 @@ async function quickLog(idx) {
       recurringChanged = true;
     }
     if (recurringChanged) await saveRecurring();
-    logForm.done = exp;
-    renderLog();
+    renderTab();
     toast('Logged!', 'ok');
   } catch(e) {
     expenses.pop();
@@ -1075,10 +1183,10 @@ async function quickLog(idx) {
   } finally { loader(false); }
 }
 
-async function logVariable(idx) {
+async function logVariable(idx, inputId) {
   const item = recurring[idx];
   if (!item) return;
-  const input = document.getElementById('reminder-amt-' + idx);
+  const input = document.getElementById(inputId || ('reminder-amt-log-' + idx));
   const amount = parseFloat(input?.value);
   if (!amount || amount <= 0) { toast('Enter a valid amount', 'err'); return; }
   const date = item.chargeDay
@@ -1094,8 +1202,7 @@ async function logVariable(idx) {
     item.amount = amount;
     item.lastLoggedMonth = currentMonth();
     await saveRecurring();
-    logForm.done = exp;
-    renderLog();
+    renderTab();
     toast('Logged!', 'ok');
   } catch(e) {
     expenses.pop();
@@ -1109,7 +1216,7 @@ async function deleteRecurringItem(idx) {
   try {
     recurring.splice(idx, 1);
     await saveRecurring();
-    renderLog();
+    renderTab();
   } catch(e) {
     toast('Failed: ' + e.message, 'err');
   } finally { loader(false); }
@@ -1237,6 +1344,7 @@ function renderDashboard() {
     </div>`).join('');
 
   document.getElementById('content').innerHTML = `
+    ${renderRecurringReminders('dash')}
     <div class="month-label">${monName}</div>
     <div class="month-total">$${fmt(tot)}</div>
 
