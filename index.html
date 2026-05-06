@@ -358,11 +358,11 @@ let recurringView   = false; // true = show add/manage form
 
 // ═══════════════════════════════════════════════
 //  AUTH — Google Identity Services
-//  Token lasts ~1h; we keep a 30-day "trusted" window where the app
-//  loads from cache and refreshes the token silently in the background.
-//  Every successful token (including silent refreshes) extends the window,
-//  so as long as the user opens the app at least once a month, they
-//  never see the login screen again.
+//  Access tokens last ~1h. On page load we always do a silent refresh
+//  (spinner visible) so the user never hits a mid-load token error.
+//  Every successful token stores et_signed_in_at; we use a 30-day
+//  TRUSTED_MS window to suppress the auth-screen during mid-session
+//  background refreshes (tab woken from sleep, etc.).
 // ═══════════════════════════════════════════════
 const TRUSTED_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
 let appLoaded = false;
@@ -377,41 +377,34 @@ function onGsiLoad() {
 
   const t = localStorage.getItem('et_tok');
   const e = +localStorage.getItem('et_exp') || 0;
-  const signedInAt = +localStorage.getItem('et_signed_in_at') || 0;
-  const trusted = signedInAt && (Date.now() - signedInAt) < TRUSTED_MS;
   const hasFolder = !!localStorage.getItem('et_fid');
 
   if (t && Date.now() < e) {
-    // Token still valid — go straight in
+    // Token still valid — load immediately, proactive refresh if expiring soon
     accessToken = t; tokenExpiry = e;
     loadApp();
-    // Refresh proactively if expiring within 5 minutes
     if (e - Date.now() < 5 * 60 * 1000) backgroundRefresh();
-  } else if (trusted && hasFolder) {
-    // Within trusted window — show the app immediately and refresh in the background.
-    // ensureToken() will block individual API calls until refresh completes.
-    accessToken = t || '';
-    tokenExpiry = 0;
-    loadApp();
-    backgroundRefresh();
   } else if (hasFolder) {
-    // Out of trusted window but previously signed in — try silent first
+    // Token expired but previously signed in — silent refresh with spinner.
+    // Google session usually persists weeks, so this succeeds without any UI.
     silentRefresh();
   } else {
     show('auth-screen');
   }
 }
 
-function backgroundRefresh() {
-  if (!tokenClient) return;
-  try { tokenClient.requestAccessToken({ prompt: 'none' }); } catch(_) {}
-}
-
+// Silent refresh used on page load (shows spinner, calls loadApp on success)
 function silentRefresh() {
   loader(true, 'Signing in…');
   pendingResolve = () => { loader(false); loadApp(); };
   pendingReject  = () => { loader(false); show('auth-screen'); };
   tokenClient.requestAccessToken({ prompt: 'none' });
+}
+
+// Background refresh used mid-session (no spinner, suppresses auth-screen on failure if trusted)
+function backgroundRefresh() {
+  if (!tokenClient) return;
+  try { tokenClient.requestAccessToken({ prompt: 'none' }); } catch(_) {}
 }
 
 function onToken(resp) {
@@ -422,16 +415,16 @@ function onToken(resp) {
   localStorage.setItem('et_exp', tokenExpiry);
   localStorage.setItem('et_signed_in_at', Date.now());
   if (pendingResolve) { const r = pendingResolve; pendingResolve = null; r(); return; }
-  if (!appLoaded) loadApp();
+  // Background refresh completed — just update the token, no re-render needed
 }
 
 function onTokenError(err) {
   loader(false);
   if (pendingReject) { const r = pendingReject; pendingReject = null; r(err); return; }
-  // Background refresh failure — only force re-auth if we're actually out of the trusted window
+  // Background refresh failure — only force re-auth if outside trusted window
   const signedInAt = +localStorage.getItem('et_signed_in_at') || 0;
   const trusted = signedInAt && (Date.now() - signedInAt) < TRUSTED_MS;
-  if (!trusted || !appLoaded) show('auth-screen');
+  if (!trusted) show('auth-screen');
 }
 
 async function ensureToken() {
