@@ -1,0 +1,1237 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="theme-color" content="#0f0f13" />
+  <title>Expense Tracker</title>
+  <style>
+    :root {
+      --bg: #0f0f13;
+      --surface: #1a1a24;
+      --surface2: #23232f;
+      --border: #2e2e42;
+      --text: #e8e8f0;
+      --muted: #7a7a9a;
+      --accent: #6c63ff;
+      --success: #43d9a2;
+      --warning: #ffc85c;
+      --danger: #ff6b6b;
+      --r: 12px;
+      --r-sm: 8px;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+    html, body { height: 100%; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: var(--bg); color: var(--text);
+      min-height: 100dvh; overscroll-behavior: none;
+    }
+
+    /* ── AUTH ── */
+    #auth-screen {
+      display: none; flex-direction: column; align-items: center;
+      justify-content: center; min-height: 100dvh;
+      padding: 40px 24px; text-align: center; gap: 20px;
+    }
+    #auth-screen.visible { display: flex; }
+    .auth-logo { font-size: 52px; }
+    .auth-title { font-size: 26px; font-weight: 800; }
+    .auth-sub { font-size: 14px; color: var(--muted); line-height: 1.6; max-width: 280px; }
+
+    /* ── APP SHELL ── */
+    #app { display: none; flex-direction: column; min-height: 100dvh; }
+    #app.visible { display: flex; }
+
+    .topbar {
+      padding: 14px 18px 10px;
+      background: var(--surface); border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; justify-content: space-between;
+      position: sticky; top: 0; z-index: 20;
+    }
+    .topbar-title { font-size: 17px; font-weight: 700; }
+    .topbar-sub { font-size: 11px; color: var(--muted); margin-top: 1px; }
+    .avatar {
+      width: 34px; height: 34px; border-radius: 50%;
+      background: var(--accent); display: flex; align-items: center;
+      justify-content: center; font-size: 14px; font-weight: 700; cursor: pointer;
+      flex-shrink: 0;
+    }
+
+    .tabbar {
+      position: fixed; bottom: 0; left: 0; right: 0;
+      background: var(--surface); border-top: 1px solid var(--border);
+      display: flex; padding-bottom: env(safe-area-inset-bottom); z-index: 20;
+    }
+    .tab-btn {
+      flex: 1; padding: 10px 0 6px; display: flex; flex-direction: column;
+      align-items: center; gap: 2px; cursor: pointer; color: var(--muted);
+      font-size: 10px; font-weight: 500; background: none; border: none;
+      transition: color 0.15s;
+    }
+    .tab-btn.active { color: var(--accent); }
+    .tab-icon { font-size: 22px; line-height: 1; }
+
+    .content {
+      flex: 1; overflow-y: auto;
+      padding: 16px 16px calc(72px + env(safe-area-inset-bottom));
+    }
+
+    /* ── BUTTONS ── */
+    .btn {
+      display: flex; align-items: center; justify-content: center; gap: 8px;
+      padding: 14px 20px; border-radius: var(--r); border: none;
+      font-size: 15px; font-weight: 600; cursor: pointer;
+      width: 100%; transition: opacity 0.15s, transform 0.1s;
+    }
+    .btn:active { opacity: 0.8; transform: scale(0.98); }
+    .btn-primary { background: var(--accent); color: #fff; }
+    .btn-surface { background: var(--surface2); color: var(--text); }
+    .btn-danger { background: rgba(255,107,107,0.15); color: var(--danger); border: 1px solid var(--danger); }
+
+    /* ── CARDS ── */
+    .card {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--r); padding: 16px; margin-bottom: 12px;
+    }
+    .card-header {
+      display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;
+    }
+    .card-title { font-size: 15px; font-weight: 700; }
+    .badge {
+      font-size: 11px; padding: 3px 8px; border-radius: 20px;
+      background: var(--surface2); color: var(--muted); font-weight: 500;
+    }
+
+    /* ── FORM ── */
+    .form-group { margin-bottom: 18px; }
+    .label {
+      display: block; font-size: 11px; color: var(--muted); font-weight: 600;
+      text-transform: uppercase; letter-spacing: 0.6px; margin-bottom: 8px;
+    }
+    input, select, textarea {
+      width: 100%; padding: 13px 14px;
+      border-radius: var(--r-sm); background: var(--surface2);
+      border: 1.5px solid var(--border); color: var(--text);
+      font-size: 16px; -webkit-appearance: none; appearance: none;
+      font-family: inherit;
+    }
+    input:focus, select:focus, textarea:focus {
+      outline: none; border-color: var(--accent);
+    }
+    .amount-wrap { position: relative; }
+    .amount-prefix {
+      position: absolute; left: 14px; top: 50%; transform: translateY(-50%);
+      font-size: 22px; font-weight: 700; color: var(--muted); pointer-events: none;
+    }
+    #amount-input {
+      padding-left: 34px; font-size: 30px; font-weight: 800;
+      height: 68px; letter-spacing: -0.5px;
+    }
+    textarea { resize: none; height: 76px; }
+    select { background-image: none; }
+
+    /* ── CHIPS ── */
+    .chip-grid { display: flex; flex-wrap: wrap; gap: 8px; }
+    .chip {
+      padding: 8px 14px; border-radius: 20px;
+      background: var(--surface2); border: 1.5px solid var(--border);
+      font-size: 13px; cursor: pointer; color: var(--text);
+      transition: all 0.15s; white-space: nowrap; user-select: none;
+    }
+    .chip.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+    /* ── SUGGESTION / ALERT BOXES ── */
+    .suggest-box {
+      background: linear-gradient(135deg, #1c1c38, #1a2636);
+      border: 1.5px solid var(--accent); border-radius: var(--r);
+      padding: 14px 16px; margin-bottom: 16px;
+    }
+    .suggest-label { font-size: 10px; color: var(--accent); font-weight: 700; text-transform: uppercase; letter-spacing: 0.6px; }
+    .suggest-card { font-size: 18px; font-weight: 800; margin: 4px 0 2px; }
+    .suggest-reason { font-size: 12px; color: var(--muted); }
+
+    .threshold-box {
+      background: var(--surface2); border-left: 3px solid var(--warning);
+      border-radius: var(--r-sm); padding: 12px 14px; margin-top: 10px;
+    }
+    .threshold-amount { font-size: 20px; font-weight: 800; color: var(--warning); }
+    .threshold-detail { font-size: 12px; color: var(--muted); margin-top: 2px; line-height: 1.4; }
+
+    /* ── PROGRESS ── */
+    .prog-row { margin-bottom: 14px; }
+    .prog-meta { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 5px; }
+    .prog-name { font-size: 13px; font-weight: 500; }
+    .prog-val { font-size: 13px; color: var(--muted); }
+    .prog-bar { height: 7px; background: var(--surface2); border-radius: 4px; overflow: hidden; }
+    .prog-fill { height: 100%; border-radius: 4px; transition: width 0.5s ease; }
+
+    /* ── DASHBOARD ── */
+    .month-label { font-size: 13px; color: var(--muted); font-weight: 500; }
+    .month-total { font-size: 40px; font-weight: 800; color: var(--accent); margin: 2px 0 20px; letter-spacing: -1px; }
+    .stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 20px; }
+    .stat { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r); padding: 14px; }
+    .stat-lbl { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600; }
+    .stat-val { font-size: 22px; font-weight: 800; margin-top: 4px; }
+
+    .section-title {
+      font-size: 11px; font-weight: 700; color: var(--muted);
+      text-transform: uppercase; letter-spacing: 0.7px;
+      margin: 20px 0 10px;
+    }
+
+    /* ── RECENT LIST ── */
+    .expense-row {
+      display: flex; align-items: center; gap: 12px;
+      padding: 11px 0; border-bottom: 1px solid var(--border);
+    }
+    .expense-row:last-child { border-bottom: none; }
+    .exp-icon {
+      width: 38px; height: 38px; border-radius: 10px;
+      background: var(--surface2); display: flex; align-items: center;
+      justify-content: center; font-size: 18px; flex-shrink: 0;
+    }
+    .exp-info { flex: 1; min-width: 0; }
+    .exp-cat { font-size: 14px; font-weight: 600; }
+    .exp-meta { font-size: 11px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .exp-amt { font-size: 15px; font-weight: 700; color: var(--danger); flex-shrink: 0; }
+
+    /* ── BENEFIT ROW ── */
+    .benefit-row {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 9px 0; border-bottom: 1px solid var(--border);
+    }
+    .benefit-row:last-child { border-bottom: none; }
+    .benefit-cat { font-size: 13px; }
+    .benefit-rate { font-size: 13px; font-weight: 700; color: var(--success); }
+    .benefit-sub { font-size: 11px; color: var(--muted); }
+
+    /* ── SUCCESS STATE ── */
+    @keyframes pop {
+      0% { transform: scale(0.5); opacity: 0; }
+      60% { transform: scale(1.15); }
+      100% { transform: scale(1); opacity: 1; }
+    }
+    .pop { animation: pop 0.35s ease forwards; }
+
+    /* ── TOAST ── */
+    .toast {
+      position: fixed; top: 16px; left: 50%; transform: translateX(-50%);
+      background: var(--surface2); border: 1.5px solid var(--border);
+      border-radius: var(--r); padding: 11px 20px; font-size: 14px;
+      z-index: 100; opacity: 0; transition: opacity 0.2s; pointer-events: none;
+      white-space: nowrap; max-width: calc(100vw - 32px);
+    }
+    .toast.show { opacity: 1; }
+    .toast.ok { border-color: var(--success); color: var(--success); }
+    .toast.err { border-color: var(--danger); color: var(--danger); }
+
+    /* ── LOADER ── */
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .spinner {
+      width: 28px; height: 28px; border: 3px solid var(--border);
+      border-top-color: var(--accent); border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+    }
+    #loader {
+      position: fixed; inset: 0; background: rgba(15,15,19,0.85);
+      display: none; align-items: center; justify-content: center;
+      flex-direction: column; gap: 14px; z-index: 50;
+    }
+    #loader.on { display: flex; }
+    #loader-msg { font-size: 13px; color: var(--muted); }
+
+    /* ── COLOR DOT ── */
+    .dot { width: 9px; height: 9px; border-radius: 50%; display: inline-block; margin-right: 6px; flex-shrink: 0; }
+  </style>
+</head>
+<body>
+
+<!-- ══════════════════ AUTH SCREEN ══════════════════ -->
+<div id="auth-screen">
+  <div class="auth-logo">💳</div>
+  <div class="auth-title">Expense Tracker</div>
+  <div class="auth-sub">Sign in with Google to sync expenses to your Drive.</div>
+  <button class="btn btn-primary" style="max-width:280px" onclick="signIn()">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+      <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
+      <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
+      <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z" fill="#FBBC05"/>
+      <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
+    </svg>
+    Sign in with Google
+  </button>
+</div>
+
+<!-- ══════════════════ MAIN APP ══════════════════ -->
+<div id="app">
+  <div class="topbar">
+    <div>
+      <div class="topbar-title">💳 Expense Tracker</div>
+      <div class="topbar-sub" id="topbar-sub">Loading…</div>
+    </div>
+    <div class="avatar" id="avatar" onclick="toggleUserMenu()">?</div>
+  </div>
+
+  <div class="content" id="content"></div>
+
+  <nav class="tabbar">
+    <button class="tab-btn active" data-tab="log" onclick="switchTab('log')">
+      <span class="tab-icon">✏️</span>Log
+    </button>
+    <button class="tab-btn" data-tab="dashboard" onclick="switchTab('dashboard')">
+      <span class="tab-icon">📊</span>Dashboard
+    </button>
+    <button class="tab-btn" data-tab="cards" onclick="switchTab('cards')">
+      <span class="tab-icon">💳</span>Cards
+    </button>
+  </nav>
+</div>
+
+<!-- Toast & Loader -->
+<div class="toast" id="toast"></div>
+<div id="loader"><div class="spinner"></div><div id="loader-msg">Loading…</div></div>
+
+<script src="https://accounts.google.com/gsi/client" async defer onload="onGsiLoad()"></script>
+<script>
+// ═══════════════════════════════════════════════
+//  CONFIG — replace CLIENT_ID before deploying
+// ═══════════════════════════════════════════════
+const CFG = {
+  CLIENT_ID:         '668545344098-33edv383henj09l4o4esg2t9pil0c15e.apps.googleusercontent.com',
+  FOLDER_NAME:       'ExpenseTracker',
+  EXPENSES_FILE:     'expenses.json',
+  CARDS_FILE:        'cards-config.json',
+  RECURRING_FILE:    'recurring.json',
+  SCOPE:             'https://www.googleapis.com/auth/drive',
+  CURRENCY:          'SGD',
+  CURRENCY_SYMBOL:   '$',
+};
+
+const CATEGORIES = ['Dining','Groceries','Online Shopping','Transport','Travel','Utilities','Others'];
+const CAT_ICON   = { Dining:'🍜', Groceries:'🛒', 'Online Shopping':'🛍️', Transport:'🚇', Travel:'✈️', Utilities:'💡', Others:'📦' };
+const CAT_COLOR  = { Dining:'#ff6584', Groceries:'#43d9a2', 'Online Shopping':'#ffc85c', Transport:'#6c63ff', Travel:'#4ecdc4', Utilities:'#a8edea', Others:'#7a7a9a' };
+
+const SUBCATEGORIES = {
+  'Dining':          ['Hawker / Food Court','Restaurant','Cafe','Fast Food','GrabFood','Deliveroo','Foodpanda','Bubble Tea','Bakery'],
+  'Groceries':       ['NTUC FairPrice','Cold Storage','Sheng Siong','Giant','RedMart','Marketplace / Jason\'s','Wet Market','Don Don Donki'],
+  'Online Shopping': ['Shopee','Lazada','Amazon','Taobao','Qoo10','Zalora','ASOS','Carousell','iHerb'],
+  'Transport':       ['Grab / Gojek','MRT / Bus','Taxi','BlueSG / EV','Petrol','Parking','ERP','Tada'],
+  'Travel':          ['Flights','Hotels','Agoda / Booking.com','Airbnb','Travel Insurance','Airport Transfer','Tours / Activities'],
+  'Utilities':       ['SP Group (Electric)','PUB (Water)','Singtel','StarHub','M1','Netflix','Disney+','Spotify','Apple / Google','ChatGPT / AI'],
+  'Others':          ['Medical / Clinic','Dental','Watsons / Guardian','Salon / Beauty','Gym / Fitness','Cinema / GV','Insurance','Electronics','Home / Reno','Education','Government / SingPass'],
+};
+
+function getSubcategories(cat) {
+  const custom = JSON.parse(localStorage.getItem('et_subcat_' + cat) || '[]');
+  return [...(SUBCATEGORIES[cat] || []), ...custom];
+}
+function addCustomSubcategory(cat, name) {
+  const arr = JSON.parse(localStorage.getItem('et_subcat_' + cat) || '[]');
+  if (!arr.includes(name)) { arr.push(name); localStorage.setItem('et_subcat_' + cat, JSON.stringify(arr)); }
+}
+
+// ═══════════════════════════════════════════════
+//  STATE
+// ═══════════════════════════════════════════════
+let tokenClient     = null;
+let accessToken     = null;
+let tokenExpiry     = 0;
+let pendingResolve  = null;
+let pendingReject   = null;
+let expenses        = [];
+let cardsConfig     = [];
+let folderId        = localStorage.getItem('et_fid')   || null;
+let expensesFileId  = localStorage.getItem('et_efid')  || null;
+let cardsFileId     = localStorage.getItem('et_cfid')  || null;
+let recurringFileId = localStorage.getItem('et_rfid')  || null;
+let activeTab       = 'log';
+let logForm         = { amount:'', category:'', subcategory:'', card:'', note:'', done:null };
+let recurring       = [];
+let recurringView   = false; // true = show add/manage form
+
+// ═══════════════════════════════════════════════
+//  AUTH — Google Identity Services
+// ═══════════════════════════════════════════════
+function onGsiLoad() {
+  tokenClient = google.accounts.oauth2.initTokenClient({
+    client_id:      CFG.CLIENT_ID,
+    scope:          CFG.SCOPE,
+    callback:       onToken,
+    error_callback: onTokenError,
+  });
+
+  // Try to restore session silently — show login only if that fails
+  const t = localStorage.getItem('et_tok');
+  const e = +localStorage.getItem('et_exp') || 0;
+  if (t && Date.now() < e) {
+    accessToken = t; tokenExpiry = e;
+    loadApp();
+  } else if (localStorage.getItem('et_fid')) {
+    // Previously signed in — attempt silent token refresh before showing login
+    silentRefresh();
+  } else {
+    show('auth-screen');
+  }
+}
+
+function silentRefresh() {
+  loader(true, 'Signing in…');
+  pendingResolve = () => { loader(false); loadApp(); };
+  pendingReject  = () => { loader(false); show('auth-screen'); };
+  tokenClient.requestAccessToken({ prompt: '' });
+}
+
+function onToken(resp) {
+  if (resp.error) { onTokenError(resp); return; }
+  accessToken = resp.access_token;
+  tokenExpiry = Date.now() + resp.expires_in * 1000 - 60_000;
+  localStorage.setItem('et_tok', accessToken);
+  localStorage.setItem('et_exp', tokenExpiry);
+  if (pendingResolve) { const r = pendingResolve; pendingResolve = null; r(); }
+  else loadApp();
+}
+
+function onTokenError(err) {
+  loader(false);
+  if (pendingReject) { const r = pendingReject; pendingReject = null; r(err); }
+  else show('auth-screen');
+}
+
+async function ensureToken() {
+  if (accessToken && Date.now() < tokenExpiry) return;
+  return new Promise((res, rej) => {
+    pendingResolve = res; pendingReject = rej;
+    tokenClient.requestAccessToken({ prompt: '' });
+  });
+}
+
+function signIn() {
+  tokenClient.requestAccessToken({ prompt: 'consent' });
+}
+
+function signOut() {
+  if (accessToken) google.accounts.oauth2.revoke(accessToken, () => {});
+  accessToken = null;
+  localStorage.removeItem('et_tok'); localStorage.removeItem('et_exp');
+  show('auth-screen'); hide('app');
+}
+
+function toggleUserMenu() {
+  if (confirm('Sign out of Expense Tracker?')) signOut();
+}
+
+// ═══════════════════════════════════════════════
+//  DRIVE API  (raw fetch — no gapi needed)
+// ═══════════════════════════════════════════════
+async function driveGet(path, params = {}) {
+  await ensureToken();
+  const url = new URL('https://www.googleapis.com' + path);
+  for (const [k,v] of Object.entries(params)) if (v != null) url.searchParams.set(k, v);
+  const r = await fetch(url, { headers: { Authorization: 'Bearer ' + accessToken } });
+  if (!r.ok) throw new Error((await r.json().catch(()=>({}))).error?.message || 'HTTP ' + r.status);
+  const ct = r.headers.get('content-type') || '';
+  return ct.includes('json') ? r.json() : r.text();
+}
+
+async function driveList(q) {
+  const d = await driveGet('/drive/v3/files', { q, fields:'files(id,name)', spaces:'drive', pageSize:10 });
+  return d.files || [];
+}
+
+async function driveRead(fileId) {
+  await ensureToken();
+  const r = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`, {
+    headers: { Authorization: 'Bearer ' + accessToken }
+  });
+  if (!r.ok) throw new Error('Read failed: ' + r.status);
+  return r.json();
+}
+
+async function driveCreate(name, content, parentId) {
+  await ensureToken();
+  const meta = { name, mimeType: 'application/json', ...(parentId ? { parents: [parentId] } : {}) };
+  const form = new FormData();
+  form.append('metadata', new Blob([JSON.stringify(meta)], { type: 'application/json' }));
+  form.append('file',     new Blob([JSON.stringify(content, null, 2)], { type: 'application/json' }));
+  const r = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name', {
+    method: 'POST', headers: { Authorization: 'Bearer ' + accessToken }, body: form
+  });
+  if (!r.ok) throw new Error('Create failed: ' + r.status);
+  return r.json();
+}
+
+async function driveUpdate(fileId, content) {
+  await ensureToken();
+  const r = await fetch(`https://www.googleapis.com/upload/drive/v3/files/${fileId}?uploadType=media`, {
+    method: 'PATCH',
+    headers: { Authorization: 'Bearer ' + accessToken, 'Content-Type': 'application/json' },
+    body: JSON.stringify(content, null, 2)
+  });
+  if (!r.ok) throw new Error('Update failed: ' + r.status);
+  return r.json();
+}
+
+async function driveCreateFolder(name) {
+  await ensureToken();
+  const r = await fetch('https://www.googleapis.com/drive/v3/files?fields=id,name', {
+    method: 'POST',
+    headers: { Authorization: 'Bearer ' + accessToken, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name, mimeType: 'application/vnd.google-apps.folder' })
+  });
+  if (!r.ok) throw new Error('Folder create failed: ' + r.status);
+  return r.json();
+}
+
+// ═══════════════════════════════════════════════
+//  BOOTSTRAP — find/create Drive files
+// ═══════════════════════════════════════════════
+async function loadApp() {
+  loader(true, 'Connecting to Drive…');
+  try {
+    // 1. Folder
+    if (!folderId) {
+      const found = await driveList(`name='${CFG.FOLDER_NAME}' and mimeType='application/vnd.google-apps.folder' and trashed=false`);
+      if (found.length) { folderId = found[0].id; }
+      else              { folderId = (await driveCreateFolder(CFG.FOLDER_NAME)).id; }
+      localStorage.setItem('et_fid', folderId);
+    }
+
+    // 2. Cards config
+    if (!cardsFileId) {
+      const found = await driveList(`name='${CFG.CARDS_FILE}' and '${folderId}' in parents and trashed=false`);
+      if (found.length) { cardsFileId = found[0].id; localStorage.setItem('et_cfid', cardsFileId); }
+    }
+    cardsConfig = cardsFileId
+      ? await driveRead(cardsFileId)
+      : defaultCards();
+    if (!cardsFileId) {
+      cardsFileId = (await driveCreate(CFG.CARDS_FILE, cardsConfig, folderId)).id;
+      localStorage.setItem('et_cfid', cardsFileId);
+    }
+
+    // 3. Expenses
+    if (!expensesFileId) {
+      const found = await driveList(`name='${CFG.EXPENSES_FILE}' and '${folderId}' in parents and trashed=false`);
+      if (found.length) { expensesFileId = found[0].id; localStorage.setItem('et_efid', expensesFileId); }
+    }
+    expenses = expensesFileId ? await driveRead(expensesFileId) : [];
+    if (!expensesFileId) {
+      expensesFileId = (await driveCreate(CFG.EXPENSES_FILE, expenses, folderId)).id;
+      localStorage.setItem('et_efid', expensesFileId);
+    }
+
+    // 4. Recurring
+    if (!recurringFileId) {
+      const found = await driveList(`name='${CFG.RECURRING_FILE}' and '${folderId}' in parents and trashed=false`);
+      if (found.length) { recurringFileId = found[0].id; localStorage.setItem('et_rfid', recurringFileId); }
+    }
+    recurring = recurringFileId ? await driveRead(recurringFileId) : [];
+    if (!recurringFileId) {
+      recurringFileId = (await driveCreate(CFG.RECURRING_FILE, recurring, folderId)).id;
+      localStorage.setItem('et_rfid', recurringFileId);
+    }
+
+    const initials = '?';
+    document.getElementById('avatar').textContent = initials;
+    document.getElementById('topbar-sub').textContent =
+      `${expenses.length} expense${expenses.length === 1 ? '' : 's'} synced`;
+
+    hide('auth-screen'); show('app');
+    renderTab();
+  } catch(e) {
+    console.error(e);
+    toast('Load failed: ' + e.message, 'err');
+  } finally { loader(false); }
+}
+
+async function saveExpenses() {
+  await driveUpdate(expensesFileId, expenses);
+  document.getElementById('topbar-sub').textContent =
+    `${expenses.length} expense${expenses.length === 1 ? '' : 's'} synced`;
+}
+
+// ═══════════════════════════════════════════════
+//  DEFAULT CARDS — replace with cards-config.json
+// ═══════════════════════════════════════════════
+function defaultCards() {
+  // Current portfolio: DBS Altitude + Citi Cash Back+
+  // When you add Maybank F&F and DBS WWMC, paste cards-config-future.json
+  return [
+    {
+      id: 'dbs-altitude',
+      name: 'DBS Altitude',
+      color: '#1f4e79',
+      benefits: [
+        { category: 'Travel', rate: 2.2, rateType: 'miles', cap: null, minSpend: 0,
+          note: 'Best for offline FCY abroad. 3.25% FX fee → buying miles at ~1.47¢ each.' },
+        { category: 'Dining',          rate: 1.3, rateType: 'miles', cap: null, minSpend: 0 },
+        { category: 'Groceries',       rate: 1.3, rateType: 'miles', cap: null, minSpend: 0 },
+        { category: 'Online Shopping', rate: 1.3, rateType: 'miles', cap: null, minSpend: 0 },
+        { category: 'Transport',       rate: 1.3, rateType: 'miles', cap: null, minSpend: 0 },
+        { category: 'Utilities',       rate: 1.3, rateType: 'miles', cap: null, minSpend: 0 },
+        { category: 'Others',          rate: 1.3, rateType: 'miles', cap: null, minSpend: 0,
+          note: 'Uncapped. DBS Points never expire on this card. Avoid sub-$5 buys (S$5 block rule).' }
+      ],
+      monthlyThresholds: []
+    },
+    {
+      id: 'citi-cashback-plus',
+      name: 'Citi Cash Back+',
+      color: '#1abc9c',
+      benefits: [
+        { category: 'Dining',          rate: 1.6, rateType: 'cashback', cap: null, minSpend: 0 },
+        { category: 'Groceries',       rate: 1.6, rateType: 'cashback', cap: null, minSpend: 0 },
+        { category: 'Online Shopping', rate: 1.6, rateType: 'cashback', cap: null, minSpend: 0 },
+        { category: 'Transport',       rate: 1.6, rateType: 'cashback', cap: null, minSpend: 0 },
+        { category: 'Utilities',       rate: 1.6, rateType: 'cashback', cap: null, minSpend: 0 },
+        { category: 'Others',          rate: 1.6, rateType: 'cashback', cap: null, minSpend: 0,
+          note: 'Uncapped catch-all. Best for big-ticket (renovations, dental, electronics) + sub-$5 spends.' }
+      ],
+      monthlyThresholds: []
+    }
+  ];
+}
+
+// ═══════════════════════════════════════════════
+//  BUSINESS LOGIC
+// ═══════════════════════════════════════════════
+function currentMonth() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+}
+
+function monthExpenses(month) {
+  return expenses.filter(e => e.date.startsWith(month));
+}
+
+function spendByCategory(list) {
+  return list.reduce((m, e) => { m[e.category] = (m[e.category]||0) + e.amount; return m; }, {});
+}
+
+function spendByCard(list) {
+  return list.reduce((m, e) => { m[e.card] = (m[e.card]||0) + e.amount; return m; }, {});
+}
+
+// Compare miles & cashback on a common scale.
+// 1 mile ≈ 1.2¢ (Economy redemption). Bump to 1.5–2¢ for premium-cabin usage.
+const MILE_VALUE_CENTS = 1.2;
+function effectiveValue(b) {
+  return b.rateType === 'miles' ? b.rate * MILE_VALUE_CENTS : b.rate;
+}
+
+function bestCard(category) {
+  let best = null, top = -1;
+  for (const c of cardsConfig) {
+    const b = (c.benefits||[]).find(x => x.category === category);
+    if (b) {
+      const v = effectiveValue(b);
+      if (v > top) { top = v; best = { card: c, benefit: b }; }
+    }
+  }
+  return best;
+}
+
+function thresholdStatus(cardId) {
+  const card = cardsConfig.find(c => c.id === cardId);
+  if (!card?.monthlyThresholds?.length) return [];
+  const start = billingCycleStart(cardId);
+  const spent = expenses
+    .filter(e => e.card === cardId && e.date >= start)
+    .reduce((s, e) => s + e.amount, 0);
+  return card.monthlyThresholds.map(t => ({
+    ...t, spent, remaining: Math.max(0, t.spend - spent), pct: Math.min(1, spent / t.spend)
+  }));
+}
+
+function cardName(id) {
+  return cardsConfig.find(c => c.id === id)?.name || id;
+}
+
+function fmt(n) {
+  return n.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+}
+
+function uid() {
+  return Date.now().toString(36) + Math.random().toString(36).slice(2,6);
+}
+
+function rateLabel(b) {
+  return b.rateType === 'cashback' ? `${b.rate}% cashback` : `${b.rate} ${b.rateType}/dollar`;
+}
+
+// ═══════════════════════════════════════════════
+//  BILLING CYCLE
+// ═══════════════════════════════════════════════
+const CYCLE_DEFAULTS = { 'citi-cashback-plus': 18, 'dbs-altitude': 12 };
+
+function getCycleDay(cardId) {
+  return parseInt(localStorage.getItem('et_cycle_' + cardId) || CYCLE_DEFAULTS[cardId] || 1);
+}
+
+function billingCycleStart(cardId) {
+  const day   = getCycleDay(cardId);
+  const today = new Date();
+  const d = today.getDate(), m = today.getMonth(), y = today.getFullYear();
+  if (d >= day) return new Date(y, m, day).toISOString().split('T')[0];
+  const pm = m === 0 ? 11 : m - 1;
+  const py = m === 0 ? y - 1 : y;
+  return new Date(py, pm, day).toISOString().split('T')[0];
+}
+
+function billingCycleLabel(cardId) {
+  const day   = getCycleDay(cardId);
+  const start = new Date(billingCycleStart(cardId));
+  const end   = new Date(start.getFullYear(), start.getMonth() + 1, day - 1);
+  const f     = d => d.toLocaleDateString('en-SG', { day: 'numeric', month: 'short' });
+  return `${f(start)} – ${f(end)}`;
+}
+
+function editCycleDay(cardId) {
+  const curr = getCycleDay(cardId);
+  const val  = prompt(`Billing start day for ${cardName(cardId)} (1–28):`, curr);
+  if (val === null) return;
+  const day = parseInt(val);
+  if (!day || day < 1 || day > 28) { toast('Enter a day between 1 and 28', 'err'); return; }
+  localStorage.setItem('et_cycle_' + cardId, day);
+  toast('Billing cycle updated', 'ok');
+  renderCards();
+}
+
+async function saveRecurring() {
+  await driveUpdate(recurringFileId, recurring);
+}
+
+// ═══════════════════════════════════════════════
+//  TAB ROUTING
+// ═══════════════════════════════════════════════
+function switchTab(tab) {
+  activeTab = tab;
+  document.querySelectorAll('.tab-btn').forEach(el =>
+    el.classList.toggle('active', el.dataset.tab === tab)
+  );
+  renderTab();
+}
+
+function renderTab() {
+  if (activeTab === 'log')       renderLog();
+  else if (activeTab === 'dashboard') renderDashboard();
+  else                           renderCards();
+}
+
+// ═══════════════════════════════════════════════
+//  LOG TAB
+// ═══════════════════════════════════════════════
+function renderLog() {
+  const c = document.getElementById('content');
+
+  if (logForm.done) {
+    const e  = logForm.done;
+    const mo = currentMonth();
+    const me = monthExpenses(mo);
+    const alerts = thresholdStatus(e.card).filter(t => t.remaining > 0);
+    c.innerHTML = `
+      <div style="text-align:center;padding:28px 0 16px">
+        <div style="font-size:52px;margin-bottom:10px" class="pop">✅</div>
+        <div style="font-size:22px;font-weight:800">$${fmt(e.amount)} logged</div>
+        <div style="font-size:14px;color:var(--muted);margin-top:4px">
+          ${CAT_ICON[e.category]} ${e.category} · ${cardName(e.card)}
+        </div>
+        ${e.note ? `<div style="font-size:13px;color:var(--muted);margin-top:4px;font-style:italic">"${e.note}"</div>` : ''}
+      </div>
+      ${alerts.map(t => `
+        <div class="threshold-box">
+          <div class="threshold-amount">$${fmt(t.remaining)} more</div>
+          <div class="threshold-detail">on ${cardName(e.card)} to reach $${fmt(t.spend)} and unlock: ${t.benefit}</div>
+        </div>
+      `).join('')}
+      <div style="height:14px"></div>
+      <button class="btn btn-primary" onclick="newLog()">Log Another</button>
+      <div style="height:8px"></div>
+      <button class="btn btn-surface" onclick="switchTab('dashboard')">View Dashboard</button>`;
+    return;
+  }
+
+  const best = logForm.category ? bestCard(logForm.category) : null;
+  const capText = b => b.cap ? ` (capped at $${b.cap}/mo)` : '';
+
+  c.innerHTML = `
+    ${best ? `
+      <div class="suggest-box">
+        <div class="suggest-label">Best card for ${CAT_ICON[logForm.category]} ${logForm.category}</div>
+        <div class="suggest-card">${best.card.name}</div>
+        <div class="suggest-reason">${rateLabel(best.benefit)}${capText(best.benefit)}</div>
+        ${best.benefit.note ? `<div class="suggest-reason" style="margin-top:6px;color:var(--accent)">💡 ${best.benefit.note}</div>` : ''}
+      </div>` : ''}
+
+    <div class="form-group">
+      <label class="label">Amount (${CFG.CURRENCY})</label>
+      <div class="amount-wrap">
+        <span class="amount-prefix">${CFG.CURRENCY_SYMBOL}</span>
+        <input id="amt" type="number" inputmode="decimal" step="0.01" placeholder="0.00"
+               value="${logForm.amount}" oninput="logForm.amount=this.value" />
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label class="label">Category</label>
+      <div class="chip-grid">
+        ${CATEGORIES.map(cat => `
+          <div class="chip ${logForm.category===cat?'active':''}"
+               onclick="pickCat('${cat}')">
+            ${CAT_ICON[cat]} ${cat}
+          </div>`).join('')}
+      </div>
+    </div>
+
+    ${logForm.category ? `
+    <div class="form-group">
+      <label class="label">Subcategory <span style="color:var(--muted);font-weight:400;text-transform:none;font-size:11px">(optional)</span></label>
+      <div class="chip-grid">
+        ${getSubcategories(logForm.category).map(sub => `
+          <div class="chip ${logForm.subcategory===sub?'active':''}"
+               style="font-size:12px;padding:6px 11px"
+               onclick="pickSubcat('${sub.replace(/'/g,"\\'")}')">
+            ${sub}
+          </div>`).join('')}
+        <div class="chip" style="font-size:12px;padding:6px 11px;color:var(--accent);border-color:var(--accent)"
+             onclick="addCustomSubcat()">＋ Custom</div>
+      </div>
+    </div>` : ''}
+
+    <div class="form-group">
+      <label class="label">Card</label>
+      <div class="chip-grid">
+        ${cardsConfig.map(card => `
+          <div class="chip ${logForm.card===card.id?'active':''}"
+               style="${logForm.card===card.id ? `background:${card.color};border-color:${card.color}` : ''}"
+               onclick="pickCard('${card.id}')">
+            ${card.name}
+          </div>`).join('')}
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label class="label">Note (optional)</label>
+      <textarea id="note" placeholder="e.g. Lunch at Maxwell Food Centre"
+                oninput="logForm.note=this.value">${logForm.note}</textarea>
+    </div>
+
+    <button class="btn btn-primary" onclick="submitLog()">Log Expense</button>
+
+    <div style="height:24px"></div>
+    ${renderRecurringSection()}`;
+}
+
+function renderRecurringSection() {
+  if (recurringView) {
+    const catOpts = CATEGORIES.map(c => `<option value="${c}">${c}</option>`).join('');
+    const cardOpts = cardsConfig.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+    return `
+      <div class="section-title">Add Recurring / Instalment</div>
+      <div class="card">
+        <div class="form-group">
+          <label class="label">Type</label>
+          <div class="chip-grid">
+            <div class="chip active" id="rtype-recurring" onclick="setRType('recurring')">🔁 Recurring</div>
+            <div class="chip" id="rtype-installment" onclick="setRType('installment')">📦 Instalment</div>
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="label">Name</label>
+          <input type="text" id="r-name" placeholder="e.g. Netflix, MacBook Pro" />
+        </div>
+        <div class="form-group">
+          <label class="label">Monthly Amount ($)</label>
+          <input type="number" inputmode="decimal" step="0.01" id="r-amount" placeholder="0.00" />
+        </div>
+        <div class="form-group">
+          <label class="label">Category</label>
+          <select id="r-cat"><option value="">Select…</option>${catOpts}</select>
+        </div>
+        <div class="form-group">
+          <label class="label">Card</label>
+          <select id="r-card"><option value="">Select…</option>${cardOpts}</select>
+        </div>
+        <div id="r-months-wrap" class="form-group" style="display:none">
+          <label class="label">Number of Instalments</label>
+          <input type="number" inputmode="numeric" id="r-months" placeholder="e.g. 12" min="1" max="60" />
+        </div>
+        <button class="btn btn-primary" onclick="saveRecurringItem()">Save</button>
+        <div style="height:8px"></div>
+        <button class="btn btn-surface" onclick="recurringView=false;renderLog()">Cancel</button>
+      </div>`;
+  }
+
+  if (!recurring.length) return `
+    <div class="section-title">Recurring & Instalments</div>
+    <button class="btn btn-surface" onclick="recurringView=true;renderLog()">+ Add Recurring / Instalment</button>`;
+
+  const rows = recurring.map((item, i) => {
+    const remaining = item.type === 'installment' ? ` · ${item.monthsLeft} left` : '';
+    const card = cardsConfig.find(c => c.id === item.card);
+    const dot  = card ? `<span class="dot" style="background:${card.color}"></span>` : '';
+    return `
+      <div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--border)">
+        <div style="flex:1;min-width:0">
+          <div style="font-size:14px;font-weight:600">${item.type==='installment'?'📦':'🔁'} ${item.name}</div>
+          <div style="font-size:11px;color:var(--muted)">${CAT_ICON[item.category]||''} ${item.category} · ${dot}${cardName(item.card)} · $${fmt(item.amount)}/mo${remaining}</div>
+        </div>
+        <button style="background:var(--accent);color:#fff;border:none;padding:7px 12px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;flex-shrink:0" onclick="quickLog(${i})">Log</button>
+        <button style="background:none;color:var(--muted);border:none;font-size:20px;cursor:pointer;padding:4px;flex-shrink:0;line-height:1" onclick="deleteRecurringItem(${i})">×</button>
+      </div>`;
+  }).join('');
+
+  return `
+    <div class="section-title">Recurring & Instalments</div>
+    <div class="card" style="padding:0 16px">${rows}</div>
+    <div style="height:8px"></div>
+    <button class="btn btn-surface" onclick="recurringView=true;renderLog()">+ Add Another</button>`;
+}
+
+let recurringType = 'recurring';
+function setRType(t) {
+  recurringType = t;
+  document.getElementById('rtype-recurring')?.classList.toggle('active', t === 'recurring');
+  document.getElementById('rtype-installment')?.classList.toggle('active', t === 'installment');
+  const mw = document.getElementById('r-months-wrap');
+  if (mw) mw.style.display = t === 'installment' ? 'block' : 'none';
+}
+
+async function saveRecurringItem() {
+  const name   = document.getElementById('r-name')?.value.trim();
+  const amount = parseFloat(document.getElementById('r-amount')?.value);
+  const cat    = document.getElementById('r-cat')?.value;
+  const card   = document.getElementById('r-card')?.value;
+  const months = recurringType === 'installment' ? parseInt(document.getElementById('r-months')?.value) : null;
+  if (!name)                          { toast('Enter a name', 'err'); return; }
+  if (!amount || amount <= 0)         { toast('Enter a valid amount', 'err'); return; }
+  if (!cat)                           { toast('Select a category', 'err'); return; }
+  if (!card)                          { toast('Select a card', 'err'); return; }
+  if (recurringType === 'installment' && (!months || months < 1)) { toast('Enter number of instalments', 'err'); return; }
+  const item = { id: uid(), type: recurringType, name, amount, category: cat, card, note: '' };
+  if (recurringType === 'installment') item.monthsLeft = months;
+  loader(true, 'Saving…');
+  try {
+    recurring.push(item);
+    await saveRecurring();
+    recurringView = false;
+    recurringType = 'recurring';
+    toast('Added!', 'ok');
+    renderLog();
+  } catch(e) {
+    recurring.pop();
+    toast('Save failed: ' + e.message, 'err');
+  } finally { loader(false); }
+}
+
+async function quickLog(idx) {
+  const item = recurring[idx];
+  if (!item) return;
+  loader(true, 'Logging…');
+  try {
+    const exp = { id: uid(), date: new Date().toISOString().split('T')[0],
+      amount: item.amount, category: item.category, card: item.card,
+      note: item.name, ts: Date.now() };
+    expenses.push(exp);
+    await saveExpenses();
+    if (item.type === 'installment') {
+      item.monthsLeft = Math.max(0, (item.monthsLeft || 1) - 1);
+      if (item.monthsLeft === 0) recurring.splice(idx, 1);
+      await saveRecurring();
+    }
+    logForm.done = exp;
+    renderLog();
+    toast('Logged!', 'ok');
+  } catch(e) {
+    expenses.pop();
+    toast('Failed: ' + e.message, 'err');
+  } finally { loader(false); }
+}
+
+async function deleteRecurringItem(idx) {
+  if (!confirm(`Remove "${recurring[idx]?.name}"?`)) return;
+  loader(true, 'Removing…');
+  try {
+    recurring.splice(idx, 1);
+    await saveRecurring();
+    renderLog();
+  } catch(e) {
+    toast('Failed: ' + e.message, 'err');
+  } finally { loader(false); }
+}
+
+function pickCat(cat) { logForm.category = cat; logForm.subcategory = ''; renderLog(); }
+function pickCard(id) { logForm.card = id; renderLog(); }
+function pickSubcat(sub) { logForm.subcategory = logForm.subcategory === sub ? '' : sub; renderLog(); }
+function addCustomSubcat() {
+  const name = prompt(`Custom subcategory for ${logForm.category}:`);
+  if (!name?.trim()) return;
+  addCustomSubcategory(logForm.category, name.trim());
+  logForm.subcategory = name.trim();
+  renderLog();
+}
+function newLog() { logForm = { amount:'', category:'', subcategory:'', card:'', note:'', done:null }; renderLog(); }
+
+async function submitLog() {
+  const amount = parseFloat(document.getElementById('amt')?.value || logForm.amount);
+  if (!amount || amount <= 0)      { toast('Enter a valid amount', 'err'); return; }
+  if (!logForm.category)           { toast('Select a category', 'err'); return; }
+  if (!logForm.card)               { toast('Select a card', 'err'); return; }
+
+  const note = (document.getElementById('note')?.value || logForm.note).trim();
+  const exp  = {
+    id: uid(),
+    date: new Date().toISOString().split('T')[0],
+    amount: Math.round(amount * 100) / 100,
+    category: logForm.category,
+    subcategory: logForm.subcategory || '',
+    card: logForm.card,
+    note,
+    ts: Date.now()
+  };
+
+  loader(true, 'Saving…');
+  try {
+    expenses.push(exp);
+    await saveExpenses();
+    logForm.done = exp;
+    renderLog();
+  } catch(e) {
+    expenses.pop();
+    toast('Save failed: ' + e.message, 'err');
+  } finally { loader(false); }
+}
+
+// ═══════════════════════════════════════════════
+//  DASHBOARD TAB
+// ═══════════════════════════════════════════════
+function renderDashboard() {
+  const mo   = currentMonth();
+  const list = monthExpenses(mo);
+  const tot  = list.reduce((s, e) => s + e.amount, 0);
+  const byCat  = spendByCategory(list);
+  const byCard = spendByCard(list);
+  const maxCat = Math.max(...Object.values(byCat), 1);
+  const maxCard= Math.max(...Object.values(byCard), 1);
+  const today  = new Date();
+  const dayNum = today.getDate();
+  const monName= today.toLocaleDateString('en-SG', { month:'long', year:'numeric' });
+
+  // Threshold alert blocks
+  const alerts = cardsConfig.flatMap(card => {
+    const thr = thresholdStatus(card.id).filter(t => t.pct < 1);
+    return thr.map(t => `
+      <div class="card" style="border-left:3px solid ${card.color}">
+        <div style="font-size:13px;font-weight:700;margin-bottom:4px">${card.name}</div>
+        <div style="font-size:12px;color:var(--muted);margin-bottom:10px">${t.benefit}</div>
+        <div style="display:flex;align-items:baseline;gap:8px;margin-bottom:8px">
+          <span style="font-size:24px;font-weight:800;color:var(--warning)">$${fmt(t.remaining)}</span>
+          <span style="font-size:12px;color:var(--muted)">more (of $${fmt(t.spend)})</span>
+        </div>
+        <div class="prog-bar" style="height:8px">
+          <div class="prog-fill" style="width:${(t.pct*100).toFixed(1)}%;background:${card.color}"></div>
+        </div>
+      </div>`);
+  }).join('');
+
+  // Category bars
+  const catBars = CATEGORIES.filter(c => byCat[c]).map(c => `
+    <div class="prog-row">
+      <div class="prog-meta">
+        <span class="prog-name">${CAT_ICON[c]} ${c}</span>
+        <span class="prog-val">$${fmt(byCat[c])}</span>
+      </div>
+      <div class="prog-bar">
+        <div class="prog-fill" style="width:${(byCat[c]/maxCat*100).toFixed(1)}%;background:${CAT_COLOR[c]}"></div>
+      </div>
+    </div>`).join('');
+
+  // Card bars
+  const cardBars = cardsConfig.filter(c => byCard[c.id]).map(c => `
+    <div class="prog-row">
+      <div class="prog-meta">
+        <span class="prog-name"><span class="dot" style="background:${c.color}"></span>${c.name}</span>
+        <span class="prog-val">$${fmt(byCard[c.id])}</span>
+      </div>
+      <div class="prog-bar">
+        <div class="prog-fill" style="width:${(byCard[c.id]/maxCard*100).toFixed(1)}%;background:${c.color}"></div>
+      </div>
+    </div>`).join('');
+
+  // Best card table
+  const bestTable = CATEGORIES.map(cat => {
+    const b = bestCard(cat); if (!b) return '';
+    return `<div class="benefit-row">
+      <div><div class="benefit-cat">${CAT_ICON[cat]} ${cat}</div></div>
+      <div style="text-align:right">
+        <div class="benefit-rate">${rateLabel(b.benefit)}</div>
+        <div class="benefit-sub">${b.card.name}</div>
+      </div>
+    </div>`;
+  }).filter(Boolean).join('');
+
+  // Recent 10
+  const recent = [...list].sort((a,b)=>b.ts-a.ts).slice(0,10).map(e => `
+    <div class="expense-row">
+      <div class="exp-icon">${CAT_ICON[e.category]||'📦'}</div>
+      <div class="exp-info">
+        <div class="exp-cat">${e.category}${e.subcategory ? ' · '+e.subcategory : ''}</div>
+        <div class="exp-meta">${e.note||cardName(e.card)} · ${e.date}</div>
+      </div>
+      <div class="exp-amt">−$${fmt(e.amount)}</div>
+    </div>`).join('');
+
+  document.getElementById('content').innerHTML = `
+    <div class="month-label">${monName}</div>
+    <div class="month-total">$${fmt(tot)}</div>
+
+    <div class="stat-grid">
+      <div class="stat"><div class="stat-lbl">Transactions</div><div class="stat-val">${list.length}</div></div>
+      <div class="stat"><div class="stat-lbl">Daily avg</div><div class="stat-val">$${fmt(dayNum > 0 ? tot/dayNum : 0)}</div></div>
+    </div>
+
+    ${alerts ? `<div class="section-title">⚡ Threshold Alerts</div>${alerts}` : ''}
+
+    <div class="section-title">By Category</div>
+    <div class="card" style="padding:16px">
+      ${catBars||'<div style="color:var(--muted);font-size:13px">No expenses this month.</div>'}
+    </div>
+
+    <div class="section-title">By Card</div>
+    <div class="card" style="padding:16px">
+      ${cardBars||'<div style="color:var(--muted);font-size:13px">No expenses this month.</div>'}
+    </div>
+
+    <div class="section-title">Best Card per Category</div>
+    <div class="card" style="padding:0 16px">${bestTable}</div>
+
+    ${recent ? `
+      <div class="section-title">Recent Expenses</div>
+      <div class="card" style="padding:8px 16px">${recent}</div>` : ''}`;
+}
+
+// ═══════════════════════════════════════════════
+//  CARDS TAB
+// ═══════════════════════════════════════════════
+function renderCards() {
+  const cardsHtml = cardsConfig.map(card => {
+    const cycleStart = billingCycleStart(card.id);
+    const cycleSpent = expenses
+      .filter(e => e.card === card.id && e.date >= cycleStart)
+      .reduce((s,e) => s + e.amount, 0);
+
+    const bRows = (card.benefits||[]).map(b => `
+      <div class="benefit-row">
+        <div style="flex:1;min-width:0">
+          <div class="benefit-cat">${CAT_ICON[b.category]||''} ${b.category}</div>
+          ${b.minSpend > 0 ? `<div class="benefit-sub">Min spend: $${b.minSpend}/cycle</div>` : ''}
+          ${b.note ? `<div class="benefit-sub" style="color:var(--accent);margin-top:2px;line-height:1.4;white-space:normal">💡 ${b.note}</div>` : ''}
+        </div>
+        <div style="text-align:right;flex-shrink:0;margin-left:10px">
+          <div class="benefit-rate">${rateLabel(b)}</div>
+          ${b.cap ? `<div class="benefit-sub">Cap $${b.cap}/cycle</div>` : ''}
+        </div>
+      </div>`).join('');
+
+    const thr = thresholdStatus(card.id);
+    const thrRows = thr.map(t => `
+      <div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--border)">
+        <div class="label" style="margin-bottom:6px">Billing Cycle Threshold</div>
+        <div style="font-size:13px;margin-bottom:6px">${t.benefit}</div>
+        <div style="font-size:13px;font-weight:700;color:${t.remaining>0?'var(--warning)':'var(--success)'};margin-bottom:8px">
+          ${t.remaining>0 ? `$${fmt(t.remaining)} more needed` : '✅ Unlocked!'}
+        </div>
+        <div class="prog-bar" style="height:8px">
+          <div class="prog-fill" style="width:${(t.pct*100).toFixed(1)}%;background:${card.color}"></div>
+        </div>
+        <div style="display:flex;justify-content:space-between;margin-top:4px">
+          <span style="font-size:11px;color:var(--muted)">$${fmt(t.spent)} spent</span>
+          <span style="font-size:11px;color:var(--muted)">$${fmt(t.spend)} target</span>
+        </div>
+      </div>`).join('');
+
+    return `
+      <div class="card" style="border-top:3px solid ${card.color}">
+        <div class="card-header">
+          <div class="card-title"><span class="dot" style="background:${card.color}"></span>${card.name}</div>
+          <div style="text-align:right">
+            <div class="badge">$${fmt(cycleSpent)} this cycle</div>
+            <div style="font-size:11px;color:var(--muted);margin-top:3px">${billingCycleLabel(card.id)}</div>
+            <div style="font-size:11px;color:var(--accent);cursor:pointer;margin-top:2px" onclick="editCycleDay('${card.id}')">⚙️ Edit cycle day</div>
+          </div>
+        </div>
+        ${bRows}
+        ${thrRows}
+      </div>`;
+  }).join('');
+
+  document.getElementById('content').innerHTML = `
+    <div class="section-title">Your Cards</div>
+    ${cardsHtml||'<div class="card" style="color:var(--muted);font-size:13px">No cards found. Edit cards-config.json on Drive.</div>'}
+
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:14px;margin-top:4px">
+      <div style="font-size:12px;color:var(--muted);line-height:1.7">
+        📁 Edit <strong>ExpenseTracker/cards-config.json</strong> on Google Drive to update your cards.<br/>
+        Tap Reload below after saving changes.
+      </div>
+    </div>
+
+    <div style="height:12px"></div>
+    <button class="btn btn-surface" onclick="reloadCards()">🔄 Reload Cards Config</button>
+    <div style="height:8px"></div>
+    <button class="btn btn-surface" onclick="resetCardsToDefault()">↺ Reset to Built-in Defaults</button>
+    <div style="height:8px"></div>
+    <button class="btn btn-danger" onclick="signOut()">Sign Out</button>`;
+}
+
+async function resetCardsToDefault() {
+  if (!confirm('Reset cards config to the built-in defaults?\nThis will overwrite your current cards-config.json on Drive.')) return;
+  loader(true, 'Resetting…');
+  try {
+    cardsConfig = defaultCards();
+    await driveUpdate(cardsFileId, cardsConfig);
+    toast('Cards reset to defaults', 'ok');
+    renderCards();
+  } catch(e) {
+    toast('Reset failed: ' + e.message, 'err');
+  } finally { loader(false); }
+}
+
+async function reloadCards() {
+  loader(true, 'Reloading…');
+  try {
+    const data = await driveRead(cardsFileId);
+    if (!Array.isArray(data)) throw new Error('File is not valid JSON — use Reset to fix it');
+    cardsConfig = data;
+    toast('Cards config reloaded', 'ok');
+    renderCards();
+  } catch(e) {
+    toast('Reload failed: ' + e.message, 'err');
+  } finally { loader(false); }
+}
+
+// ═══════════════════════════════════════════════
+//  UI HELPERS
+// ═══════════════════════════════════════════════
+let toastTimer = null;
+function toast(msg, type='') {
+  const el = document.getElementById('toast');
+  el.textContent = msg; el.className = `toast show ${type}`;
+  if (toastTimer) clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove('show'), 2800);
+}
+
+function loader(on, msg='Loading…') {
+  document.getElementById('loader').classList.toggle('on', on);
+  document.getElementById('loader-msg').textContent = msg;
+}
+
+function show(id) { document.getElementById(id).classList.add('visible'); }
+function hide(id) { document.getElementById(id).classList.remove('visible'); }
+</script>
+</body>
+</html>
