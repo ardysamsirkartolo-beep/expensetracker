@@ -870,8 +870,8 @@ function renderRecurringReminders() {
     const realIdx = recurring.indexOf(item);
     return `
       <div style="background:linear-gradient(135deg,#fef3c7,#fde68a);border:1px solid #f59e0b;border-radius:12px;padding:14px;margin-bottom:12px">
-        <div style="font-size:13px;font-weight:700;color:#92400e;margin-bottom:4px">⚠️ ${item.name} bill is due</div>
-        <div style="font-size:12px;color:#78350f;margin-bottom:10px">Shown on day ${item.billDay} · tap below to enter this month's amount</div>
+        <div style="font-size:13px;font-weight:700;color:#92400e;margin-bottom:4px">⚠️ ${item.name} bill is in</div>
+        <div style="font-size:12px;color:#78350f;margin-bottom:10px">Bill day ${item.billDay}${item.chargeDay ? ` · card charges on day ${item.chargeDay}` : ''} · enter this month's amount</div>
         <div style="display:flex;gap:8px;align-items:center">
           <span style="color:#92400e;font-weight:700">$</span>
           <input id="reminder-amt-${realIdx}" type="number" inputmode="decimal" step="0.01" placeholder="Amount"
@@ -915,7 +915,12 @@ function renderRecurringSection() {
         <div class="form-group" id="r-billday-wrap" style="display:none">
           <label class="label">Bill shown on day of month</label>
           <input type="number" inputmode="numeric" id="r-billday" placeholder="e.g. 12" min="1" max="31" />
-          <div style="font-size:11px;color:var(--muted);margin-top:4px">A reminder will appear on this day each month asking you to update the amount.</div>
+          <div style="font-size:11px;color:var(--muted);margin-top:4px">Reminder appears on this day so you can enter the bill amount.</div>
+        </div>
+        <div class="form-group" id="r-chargeday-wrap" style="display:none">
+          <label class="label">Card charges on day of month</label>
+          <input type="number" inputmode="numeric" id="r-chargeday" placeholder="e.g. 26" min="1" max="31" />
+          <div style="font-size:11px;color:var(--muted);margin-top:4px">The expense is dated for this day — matches when the card actually processes it. If earlier than the bill day, it counts in the next month.</div>
         </div>
         <div class="form-group">
           <label class="label">Category</label>
@@ -944,7 +949,9 @@ function renderRecurringSection() {
     const card = cardsConfig.find(c => c.id === item.card);
     const dot  = card ? `<span class="dot" style="background:${card.color}"></span>` : '';
     const icon = item.type === 'installment' ? '📦' : (item.variable ? '📝' : '🔁');
-    const varTag = item.variable ? ` · variable (day ${item.billDay||'?'})` : '';
+    const varTag = item.variable
+      ? ` · variable (bill ${item.billDay||'?'}${item.chargeDay ? `, charge ${item.chargeDay}` : ''})`
+      : '';
     const amtLabel = item.variable ? `~$${fmt(item.amount)}/mo` : `$${fmt(item.amount)}/mo`;
     return `
       <div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--border)">
@@ -966,8 +973,22 @@ function renderRecurringSection() {
 
 function toggleVariable() {
   const checked = document.getElementById('r-variable')?.checked;
-  const wrap = document.getElementById('r-billday-wrap');
-  if (wrap) wrap.style.display = checked ? 'block' : 'none';
+  const bw = document.getElementById('r-billday-wrap');
+  const cw = document.getElementById('r-chargeday-wrap');
+  if (bw) bw.style.display = checked ? 'block' : 'none';
+  if (cw) cw.style.display = checked ? 'block' : 'none';
+}
+
+function chargeDateFor(billDay, chargeDay) {
+  const now = new Date();
+  let y = now.getFullYear(), m = now.getMonth();
+  if (chargeDay < billDay) {
+    m += 1;
+    if (m > 11) { m = 0; y += 1; }
+  }
+  const dim = new Date(y, m + 1, 0).getDate();
+  const d = Math.min(chargeDay, dim);
+  return `${y}-${String(m+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
 }
 
 let recurringType = 'recurring';
@@ -985,17 +1006,19 @@ async function saveRecurringItem() {
   const cat    = document.getElementById('r-cat')?.value;
   const card   = document.getElementById('r-card')?.value;
   const months = recurringType === 'installment' ? parseInt(document.getElementById('r-months')?.value) : null;
-  const isVar  = recurringType === 'recurring' && !!document.getElementById('r-variable')?.checked;
-  const billDay= isVar ? parseInt(document.getElementById('r-billday')?.value) : null;
+  const isVar    = recurringType === 'recurring' && !!document.getElementById('r-variable')?.checked;
+  const billDay  = isVar ? parseInt(document.getElementById('r-billday')?.value)   : null;
+  const chargeDay= isVar ? parseInt(document.getElementById('r-chargeday')?.value) : null;
   if (!name)                          { toast('Enter a name', 'err'); return; }
   if (!amount || amount <= 0)         { toast('Enter a valid amount', 'err'); return; }
   if (!cat)                           { toast('Select a category', 'err'); return; }
   if (!card)                          { toast('Select a card', 'err'); return; }
   if (recurringType === 'installment' && (!months || months < 1)) { toast('Enter number of instalments', 'err'); return; }
-  if (isVar && (!billDay || billDay < 1 || billDay > 31)) { toast('Enter bill day (1–31)', 'err'); return; }
+  if (isVar && (!billDay   || billDay   < 1 || billDay   > 31)) { toast('Enter bill day (1–31)', 'err'); return; }
+  if (isVar && (!chargeDay || chargeDay < 1 || chargeDay > 31)) { toast('Enter charge day (1–31)', 'err'); return; }
   const item = { id: uid(), type: recurringType, name, amount, category: cat, card, note: '' };
   if (recurringType === 'installment') item.monthsLeft = months;
-  if (isVar) { item.variable = true; item.billDay = billDay; }
+  if (isVar) { item.variable = true; item.billDay = billDay; item.chargeDay = chargeDay; }
   loader(true, 'Saving…');
   try {
     recurring.push(item);
@@ -1021,9 +1044,12 @@ async function quickLog(idx) {
     if (!parsed || parsed <= 0) { toast('Invalid amount', 'err'); return; }
     amount = parsed;
   }
+  const date = (item.variable && item.chargeDay)
+    ? chargeDateFor(item.billDay || item.chargeDay, item.chargeDay)
+    : new Date().toISOString().split('T')[0];
   loader(true, 'Logging…');
   try {
-    const exp = { id: uid(), date: new Date().toISOString().split('T')[0],
+    const exp = { id: uid(), date,
       amount, category: item.category, card: item.card,
       note: item.name, ts: Date.now() };
     expenses.push(exp);
@@ -1055,9 +1081,12 @@ async function logVariable(idx) {
   const input = document.getElementById('reminder-amt-' + idx);
   const amount = parseFloat(input?.value);
   if (!amount || amount <= 0) { toast('Enter a valid amount', 'err'); return; }
+  const date = item.chargeDay
+    ? chargeDateFor(item.billDay || item.chargeDay, item.chargeDay)
+    : new Date().toISOString().split('T')[0];
   loader(true, 'Logging…');
   try {
-    const exp = { id: uid(), date: new Date().toISOString().split('T')[0],
+    const exp = { id: uid(), date,
       amount, category: item.category, card: item.card,
       note: item.name, ts: Date.now() };
     expenses.push(exp);
