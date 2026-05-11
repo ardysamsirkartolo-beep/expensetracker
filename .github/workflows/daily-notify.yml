@@ -1,0 +1,32 @@
+name: Daily Expense Summary
+
+on:
+  schedule:
+    - cron: '0 0 * * *'   # 8:00 AM SGT (UTC+8) = 00:00 UTC
+  workflow_dispatch:        # allow manual trigger
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Send daily summary
+        run: node notify.js
+        env:
+          GOOGLE_CLIENT_ID:      ${{ secrets.GOOGLE_CLIENT_ID }}
+          GOOGLE_CLIENT_SECRET:  ${{ secrets.GOOGLE_CLIENT_SECRET }}
+          GOOGLE_REFRESH_TOKEN:  ${{ secrets.GOOGLE_REFRESH_TOKEN }}
+          DRIVE_FOLDER_ID:       ${{ secrets.DRIVE_FOLDER_ID }}
+          TELEGRAM_BOT_TOKEN:    ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID:      ${{ secrets.TELEGRAM_CHAT_ID }}
+          DRIVE_FOLDER_NAME:     ExpenseTracker
+          CURRENCY:              SGD
