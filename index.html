@@ -285,9 +285,6 @@
     <button class="tab-btn" data-tab="dashboard" onclick="switchTab('dashboard')">
       <span class="tab-icon">📊</span>Dashboard
     </button>
-    <button class="tab-btn" data-tab="recurring" onclick="switchTab('recurring')">
-      <span class="tab-icon">🔁</span>Recurring
-    </button>
     <button class="tab-btn" data-tab="cards" onclick="switchTab('cards')">
       <span class="tab-icon">💳</span>Cards
     </button>
@@ -354,7 +351,10 @@ let recurringFileId = localStorage.getItem('et_rfid')  || null;
 let activeTab       = 'log';
 let logForm         = { amount:'', category:'', subcategory:'', card:'', note:'', done:null };
 let recurring       = [];
-let recurringView   = false; // true = show add/manage form
+let recurringView        = false; // true = show add/edit form inside recurring sub-page
+let logSubview           = 'form'; // 'form' | 'recurring'
+let recurringType        = 'recurring';
+let editingRecurringIdx  = null;
 
 // ═══════════════════════════════════════════════
 //  AUTH — Google Identity Services
@@ -588,8 +588,7 @@ async function saveExpenses() {
 //  DEFAULT CARDS — replace with cards-config.json
 // ═══════════════════════════════════════════════
 function defaultCards() {
-  // Current portfolio: DBS Altitude + Citi Cash Back+
-  // When you add Maybank F&F and DBS WWMC, paste cards-config-future.json
+  // Current portfolio: DBS Altitude + Citi Cash Back+ + DBS Woman's World
   return [
     {
       id: 'dbs-altitude',
@@ -622,6 +621,26 @@ function defaultCards() {
           note: 'Uncapped catch-all. Best for big-ticket (renovations, dental, electronics) + sub-$5 spends.' }
       ],
       monthlyThresholds: []
+    },
+    {
+      id: 'dbs-wwmc',
+      name: "DBS Woman's World",
+      color: '#c2185b',
+      benefits: [
+        { category: 'Online Shopping', rate: 4, rateType: 'miles', cap: null, minSpend: 0,
+          note: 'Online only. $1000/mo TOTAL cap across all online categories on this card.' },
+        { category: 'Transport',       rate: 4, rateType: 'miles', cap: null, minSpend: 0,
+          note: 'Online ride-hailing only (Grab, Gojek). Offline drops to 0.4 mpd.' },
+        { category: 'Travel',          rate: 4, rateType: 'miles', cap: null, minSpend: 0,
+          note: 'Online flight/hotel bookings (airline direct, Agoda, Booking.com).' },
+        { category: 'Dining',          rate: 4, rateType: 'miles', cap: null, minSpend: 0,
+          note: 'Foodpanda/Deliveroo OR Kris+ at physical merchants.' },
+        { category: 'Utilities',       rate: 4, rateType: 'miles', cap: null, minSpend: 0,
+          note: 'Online recurring bills (telco portals, streaming subs).' }
+      ],
+      monthlyThresholds: [
+        { spend: 1000, benefit: '$1000 online cap reached — switch to Altitude or Cash Back+ (drops to 0.4 mpd).' }
+      ]
     }
   ];
 }
@@ -740,6 +759,7 @@ async function saveRecurring() {
 // ═══════════════════════════════════════════════
 function switchTab(tab) {
   activeTab = tab;
+  if (tab === 'log') { logSubview = 'form'; recurringView = false; editingRecurringIdx = null; }
   document.querySelectorAll('.tab-btn').forEach(el =>
     el.classList.toggle('active', el.dataset.tab === tab)
   );
@@ -747,9 +767,8 @@ function switchTab(tab) {
 }
 
 function renderTab() {
-  if (activeTab === 'log')            renderLog();
+  if (activeTab === 'log' || activeTab === 'recurring') renderLog();
   else if (activeTab === 'dashboard') renderDashboard();
-  else if (activeTab === 'recurring') renderRecurring();
   else                                renderCards();
 }
 
@@ -757,6 +776,8 @@ function renderTab() {
 //  LOG TAB
 // ═══════════════════════════════════════════════
 function renderLog() {
+  if (logSubview === 'recurring') { renderRecurringSubpage(); return; }
+
   const c = document.getElementById('content');
 
   if (logForm.done) {
@@ -852,17 +873,50 @@ function renderLog() {
                 oninput="logForm.note=this.value">${logForm.note}</textarea>
     </div>
 
-    <button class="btn btn-primary" onclick="submitLog()">Log Expense</button>`;
+    <button class="btn btn-primary" onclick="submitLog()">Log Expense</button>
+
+    <div style="height:20px"></div>
+    ${renderRecurringStrip()}`;
 }
 
-function renderRecurring() {
+function renderRecurringStrip() {
+  const count = recurring.length;
+  const mo = currentMonth();
+  const day = new Date().getDate();
+  const overdue = recurring.filter(r => {
+    if (!r.variable) return false;
+    const rd = reminderDayFor(r);
+    return rd && day >= rd && r.lastLoggedMonth !== mo;
+  }).length;
+
+  const monthly = recurring.reduce((s, r) => s + (r.amount || 0), 0);
+  const badge = overdue ? `<span style="background:#ef4444;color:#fff;border-radius:10px;padding:1px 7px;font-size:11px;font-weight:700;margin-left:6px">${overdue} due</span>` : '';
+
+  return `
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 0 4px">
+      <div>
+        <span style="font-size:13px;font-weight:700">🔁 Recurring & Instalments</span>${badge}
+        ${count ? `<div style="font-size:11px;color:var(--muted);margin-top:2px">${count} item${count===1?'':'s'} · ~$${fmt(monthly)}/mo</div>` : ''}
+      </div>
+      <button onclick="${count ? 'openRecurringSubpage()' : 'openRecurringSubpage(true)'}" style="background:none;border:1px solid var(--border);border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;color:var(--accent);cursor:pointer">
+        ${count ? 'Manage →' : '+ Add'}
+      </button>
+    </div>`;
+}
+
+function openRecurringSubpage(startAdd) {
+  logSubview = 'recurring';
+  recurringView = !!startAdd;
+  editingRecurringIdx = null;
+  recurringType = 'recurring';
+  renderLog();
+}
+
+function renderRecurringSubpage() {
+  const c = document.getElementById('content');
   const recList = recurring;
-  const fixedMonthly = recList
-    .filter(r => !r.variable && (r.type === 'recurring' || r.type === 'installment'))
-    .reduce((s, r) => s + (r.amount || 0), 0);
-  const varMonthly = recList
-    .filter(r => r.variable)
-    .reduce((s, r) => s + (r.amount || 0), 0);
+  const fixedMonthly = recList.filter(r => !r.variable).reduce((s, r) => s + (r.amount||0), 0);
+  const varMonthly   = recList.filter(r =>  r.variable).reduce((s, r) => s + (r.amount||0), 0);
   const totalEst = fixedMonthly + varMonthly;
   const installmentCount = recList.filter(r => r.type === 'installment').length;
   const recurringCount   = recList.filter(r => r.type !== 'installment').length;
@@ -877,11 +931,21 @@ function renderRecurring() {
       </div>
     </div>` : '';
 
-  document.getElementById('content').innerHTML = `
+  c.innerHTML = `
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px">
+      <button onclick="closeRecurringSubpage()" style="background:none;border:none;font-size:22px;cursor:pointer;padding:0;line-height:1;color:var(--accent)">←</button>
+      <div style="font-size:17px;font-weight:800">Recurring & Instalments</div>
+    </div>
     ${renderRecurringReminders('rec')}
-    <div class="section-title">Recurring & Instalments</div>
     ${summary}
     ${renderRecurringSection()}`;
+}
+
+function closeRecurringSubpage() {
+  logSubview = 'form';
+  recurringView = false;
+  editingRecurringIdx = null;
+  renderLog();
 }
 
 function reminderDayFor(item) {
@@ -1044,7 +1108,6 @@ function cancelRecurringEdit() {
   renderTab();
 }
 
-let recurringType = 'recurring';
 function setRType(t) {
   recurringType = t;
   document.getElementById('rtype-recurring')?.classList.toggle('active', t === 'recurring');
@@ -1110,7 +1173,6 @@ async function saveRecurringItem() {
   } finally { loader(false); }
 }
 
-let editingRecurringIdx = null;
 function editRecurringItem(idx) {
   const item = recurring[idx];
   if (!item) return;
