@@ -1,3 +1,12 @@
 .env
 node_modules/
 *.log
+
+# Local Claude Code permissions
+.claude/
+
+# Generated import artifacts (user data, not source)
+import-output/
+cards-config.json
+expenses.json
+recurring.json

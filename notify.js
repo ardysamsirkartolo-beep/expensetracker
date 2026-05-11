@@ -25,8 +25,8 @@ const EXPENSES_FILE = 'expenses.json';
 const CARDS_FILE    = 'cards-config.json';
 const CURRENCY      = process.env.CURRENCY || 'SGD';
 
-const CATEGORIES = ['Dining','Groceries','Online Shopping','Transport','Travel','Utilities','Others'];
-const CAT_ICON   = { Dining:'🍜', Groceries:'🛒', 'Online Shopping':'🛍️', Transport:'🚇', Travel:'✈️', Utilities:'💡', Others:'📦' };
+const CATEGORIES = ['Dining','Groceries','Online Shopping','Transport','Travel','Utilities','Subscriptions','Others'];
+const CAT_ICON   = { Dining:'🍜', Groceries:'🛒', 'Online Shopping':'🛍️', Transport:'🚇', Travel:'✈️', Utilities:'💡', Subscriptions:'📱', Others:'📦' };
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
 function makeAuth() {

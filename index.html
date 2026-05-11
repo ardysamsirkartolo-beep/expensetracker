@@ -311,17 +311,18 @@ const CFG = {
   CURRENCY_SYMBOL:   '$',
 };
 
-const CATEGORIES = ['Dining','Groceries','Online Shopping','Transport','Travel','Utilities','Others'];
-const CAT_ICON   = { Dining:'🍜', Groceries:'🛒', 'Online Shopping':'🛍️', Transport:'🚇', Travel:'✈️', Utilities:'💡', Others:'📦' };
-const CAT_COLOR  = { Dining:'#ff6584', Groceries:'#43d9a2', 'Online Shopping':'#ffc85c', Transport:'#6c63ff', Travel:'#4ecdc4', Utilities:'#a8edea', Others:'#7a7a9a' };
+const CATEGORIES = ['Dining','Groceries','Online Shopping','Transport','Travel','Utilities','Subscriptions','Others'];
+const CAT_ICON   = { Dining:'🍜', Groceries:'🛒', 'Online Shopping':'🛍️', Transport:'🚇', Travel:'✈️', Utilities:'💡', Subscriptions:'📱', Others:'📦' };
+const CAT_COLOR  = { Dining:'#ff6584', Groceries:'#43d9a2', 'Online Shopping':'#ffc85c', Transport:'#6c63ff', Travel:'#4ecdc4', Utilities:'#a8edea', Subscriptions:'#b794f4', Others:'#7a7a9a' };
 
 const SUBCATEGORIES = {
   'Dining':          ['Hawker / Food Court','Restaurant','Cafe','Fast Food','GrabFood','Deliveroo','Foodpanda','Bubble Tea','Bakery'],
   'Groceries':       ['NTUC FairPrice','Cold Storage','Sheng Siong','Giant','RedMart','Marketplace / Jason\'s','Wet Market','Don Don Donki'],
-  'Online Shopping': ['Shopee','Lazada','Amazon','Taobao','Qoo10','Zalora','ASOS','Carousell','iHerb'],
+  'Online Shopping': ['Shopee','Lazada','Amazon','Taobao','Qoo10','Zalora','ASOS','Carousell','iHerb','In-App Purchase','Atome'],
   'Transport':       ['Grab / Gojek','MRT / Bus','Taxi','BlueSG / EV','Petrol','Parking','ERP','Tada'],
   'Travel':          ['Flights','Hotels','Agoda / Booking.com','Airbnb','Travel Insurance','Airport Transfer','Tours / Activities'],
-  'Utilities':       ['SP Group (Electric)','PUB (Water)','Singtel','StarHub','M1','Netflix','Disney+','Spotify','Apple / Google','ChatGPT / AI'],
+  'Utilities':       ['SP Group (Electric)','PUB (Water)','Singtel','StarHub','M1','Viewqwest','Other Telco','Other Utility'],
+  'Subscriptions':   ['Netflix','Spotify','Disney+','Apple TV','YouTube Premium','Google One','iCloud','MEGA','PikPak','VPN','ChatGPT / AI','Claude / AI','Game Pass','NBA League Pass','Patreon','Rovo Premium','Other Sub'],
   'Others':          ['Medical / Clinic','Dental','Watsons / Guardian','Salon / Beauty','Gym / Fitness','Cinema / GV','Insurance','Electronics','Home / Reno','Education','Government / SingPass'],
 };
 
@@ -602,6 +603,7 @@ function defaultCards() {
         { category: 'Online Shopping', rate: 1.3, rateType: 'miles', cap: null, minSpend: 0 },
         { category: 'Transport',       rate: 1.3, rateType: 'miles', cap: null, minSpend: 0 },
         { category: 'Utilities',       rate: 1.3, rateType: 'miles', cap: null, minSpend: 0 },
+        { category: 'Subscriptions',   rate: 1.3, rateType: 'miles', cap: null, minSpend: 0 },
         { category: 'Others',          rate: 1.3, rateType: 'miles', cap: null, minSpend: 0,
           note: 'Uncapped. DBS Points never expire on this card. Avoid sub-$5 buys (S$5 block rule).' }
       ],
@@ -617,6 +619,7 @@ function defaultCards() {
         { category: 'Online Shopping', rate: 1.6, rateType: 'cashback', cap: null, minSpend: 0 },
         { category: 'Transport',       rate: 1.6, rateType: 'cashback', cap: null, minSpend: 0 },
         { category: 'Utilities',       rate: 1.6, rateType: 'cashback', cap: null, minSpend: 0 },
+        { category: 'Subscriptions',   rate: 1.6, rateType: 'cashback', cap: null, minSpend: 0 },
         { category: 'Others',          rate: 1.6, rateType: 'cashback', cap: null, minSpend: 0,
           note: 'Uncapped catch-all. Best for big-ticket (renovations, dental, electronics) + sub-$5 spends.' }
       ],
@@ -636,7 +639,9 @@ function defaultCards() {
         { category: 'Dining',          rate: 4, rateType: 'miles', cap: null, minSpend: 0,
           note: 'Foodpanda/Deliveroo OR Kris+ at physical merchants.' },
         { category: 'Utilities',       rate: 4, rateType: 'miles', cap: null, minSpend: 0,
-          note: 'Online recurring bills (telco portals, streaming subs).' }
+          note: 'Online recurring bills (telco portals).' },
+        { category: 'Subscriptions',   rate: 4, rateType: 'miles', cap: null, minSpend: 0,
+          note: 'Online streaming/SaaS subs (Netflix, Spotify, Claude, etc.).' }
       ],
       monthlyThresholds: [
         { spend: 1000, benefit: '$1000 online cap reached — switch to Altitude or Cash Back+ (drops to 0.4 mpd).' }
@@ -889,7 +894,7 @@ function renderRecurringStrip() {
     return rd && day >= rd && r.lastLoggedMonth !== mo;
   }).length;
 
-  const monthly = recurring.reduce((s, r) => s + (r.amount || 0), 0);
+  const monthly = recurring.reduce((s, r) => s + (r.frequency === 'annual' ? (r.amount||0)/12 : (r.amount||0)), 0);
   const badge = overdue ? `<span style="background:#ef4444;color:#fff;border-radius:10px;padding:1px 7px;font-size:11px;font-weight:700;margin-left:6px">${overdue} due</span>` : '';
 
   return `
@@ -915,8 +920,9 @@ function openRecurringSubpage(startAdd) {
 function renderRecurringSubpage() {
   const c = document.getElementById('content');
   const recList = recurring;
-  const fixedMonthly = recList.filter(r => !r.variable).reduce((s, r) => s + (r.amount||0), 0);
-  const varMonthly   = recList.filter(r =>  r.variable).reduce((s, r) => s + (r.amount||0), 0);
+  const monthlyEquiv = r => r.frequency === 'annual' ? (r.amount || 0) / 12 : (r.amount || 0);
+  const fixedMonthly = recList.filter(r => !r.variable).reduce((s, r) => s + monthlyEquiv(r), 0);
+  const varMonthly   = recList.filter(r =>  r.variable).reduce((s, r) => s + monthlyEquiv(r), 0);
   const totalEst = fixedMonthly + varMonthly;
   const installmentCount = recList.filter(r => r.type === 'installment').length;
   const recurringCount   = recList.filter(r => r.type !== 'installment').length;
@@ -954,6 +960,13 @@ function reminderDayFor(item) {
   return null;
 }
 
+function ordinal(n) {
+  if (!n) return '';
+  const s = ['th','st','nd','rd'];
+  const v = n % 100;
+  return n + (s[(v - 20) % 10] || s[v] || s[0]);
+}
+
 function renderRecurringReminders(prefix) {
   const mo  = currentMonth();
   const day = new Date().getDate();
@@ -966,15 +979,13 @@ function renderRecurringReminders(prefix) {
   return due.map(item => {
     const realIdx = recurring.indexOf(item);
     const inputId = `reminder-amt-${prefix||'log'}-${realIdx}`;
-    const sub = [
-      item.billDay   ? `bill ${item.billDay}` : null,
-      item.chargeDay ? `charge ${item.chargeDay}` : null,
-      `remind ${reminderDayFor(item)}`,
-    ].filter(Boolean).join(' · ');
+    const chargePhrase = item.chargeDay
+      ? `Your ${cardName(item.card)} will be charged on the ${ordinal(item.chargeDay)}.`
+      : '';
     return `
       <div style="background:linear-gradient(135deg,#fef3c7,#fde68a);border:1px solid #f59e0b;border-radius:12px;padding:14px;margin-bottom:12px">
-        <div style="font-size:13px;font-weight:700;color:#92400e;margin-bottom:4px">⚠️ ${item.name} bill is in</div>
-        <div style="font-size:12px;color:#78350f;margin-bottom:10px">${sub} · enter this month's amount</div>
+        <div style="font-size:13px;font-weight:700;color:#92400e;margin-bottom:4px">⚠️ ${item.name} bill is in — enter this month's amount</div>
+        <div style="font-size:12px;color:#78350f;margin-bottom:10px">${chargePhrase}</div>
         <div style="display:flex;gap:8px;align-items:center">
           <span style="color:#92400e;font-weight:700">$</span>
           <input id="${inputId}" type="number" inputmode="decimal" step="0.01" placeholder="Amount"
@@ -1057,11 +1068,20 @@ function renderRecurringSection() {
     const remaining = item.type === 'installment' ? ` · ${item.monthsLeft} left` : '';
     const card = cardsConfig.find(c => c.id === item.card);
     const dot  = card ? `<span class="dot" style="background:${card.color}"></span>` : '';
-    const icon = item.type === 'installment' ? '📦' : (item.variable ? '📝' : '🔁');
+    const isAnnual = item.frequency === 'annual';
+    const icon = item.type === 'installment' ? '📦' : (item.variable ? '📝' : (isAnnual ? '📅' : '🔁'));
     const varTag = item.variable
-      ? ` · variable (bill ${item.billDay||'?'}, remind ${reminderDayFor(item)||'?'}${item.chargeDay ? `, charge ${item.chargeDay}` : ''})`
-      : '';
-    const amtLabel = item.variable ? `~$${fmt(item.amount)}/mo` : `$${fmt(item.amount)}/mo`;
+      ? (item.billDay && item.chargeDay
+          ? ` · bill arrives ${ordinal(item.billDay)}, charged on ${ordinal(item.chargeDay)}`
+          : ' · variable amount')
+      : (isAnnual && item.renewalDate
+          ? ` · renews ${new Date(item.renewalDate).toLocaleDateString('en-SG', { day:'numeric', month:'short', year:'numeric' })}`
+          : '');
+    const amtLabel = item.variable
+      ? `~$${fmt(item.amount)}/mo`
+      : (isAnnual
+          ? `$${fmt(item.amount)}/yr (~$${fmt(item.amount/12)}/mo)`
+          : `$${fmt(item.amount)}/mo`);
     return `
       <div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--border)">
         <div style="flex:1;min-width:0">
